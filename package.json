@@ -1,0 +1,26 @@
+{
+  "name": "downtown-special",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "熱血時代劇風格的網頁雙人合作動作遊戲（私人專案）",
+  "scripts": {
+    "dev:server": "tsx watch src/server/main.ts",
+    "dev:client": "vite",
+    "build": "vite build",
+    "start": "tsx src/server/main.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "tsx": "^4.19.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
+    "typescript": "^5.6.0",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0"
+  }
+}

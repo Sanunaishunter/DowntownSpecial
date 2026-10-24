@@ -1,0 +1,32 @@
+{
+  "kunimasa": {
+    "image": "kunimasa.png",
+    "w": 32,
+    "h": 48,
+    "ox": 16,
+    "oy": 46,
+    "fps": 8,
+    "anims": {
+      "idle": [0],
+      "walk": [1, 2, 3, 2],
+      "run": [4, 5],
+      "jump": [6],
+      "punch": [7, 8],
+      "kick": [9],
+      "airkick": [10],
+      "dash": [11],
+      "upper": [12],
+      "hurt": [13],
+      "down": [14],
+      "dead": [14],
+      "getup": [15],
+      "swing": [16, 17],
+      "throw": [18],
+      "lift": [19],
+      "hold": [20],
+      "held": [21],
+      "stomp": [22],
+      "pick": [19]
+    }
+  }
+}

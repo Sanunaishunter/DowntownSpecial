@@ -1,0 +1,227 @@
+:root {
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #000;
+  color: #fff;
+  font-family: system-ui, 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  overflow: hidden;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  position: relative;
+}
+#screen {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+canvas {
+  image-rendering: pixelated;
+  background: #000;
+  display: block;
+}
+#net {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  font: 12px/1.2 monospace;
+  color: #fff;
+  text-shadow: 0 1px 2px #000;
+  pointer-events: none;
+}
+#leave {
+  position: absolute;
+  top: 22px;
+  right: 6px;
+  opacity: 0.6;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+#menu {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.78);
+  padding: 16px;
+  text-align: center;
+}
+#menu[hidden] {
+  display: none;
+}
+#menu h1 {
+  margin: 0;
+  font-size: clamp(28px, 7vw, 48px);
+  letter-spacing: 0.15em;
+  color: #ffcf40;
+  text-shadow: 3px 3px 0 #a02020;
+}
+.sub {
+  margin: 0 0 6px;
+  opacity: 0.8;
+}
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+button,
+input {
+  font: inherit;
+  border: 2px solid #fff;
+  background: #1a1a2e;
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 6px;
+}
+button:active {
+  background: #c03030;
+}
+input {
+  width: 9em;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.msg {
+  min-height: 1.4em;
+  margin: 0;
+  color: #ffd070;
+}
+.help {
+  margin: 4px 0 0;
+  font-size: 12px;
+  opacity: 0.7;
+  line-height: 1.6;
+}
+
+#touch {
+  display: none;
+  height: 36dvh;
+  min-height: 150px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  align-items: center;
+  justify-content: space-between;
+  touch-action: none;
+}
+#app.touch #touch {
+  display: flex;
+}
+#dpad {
+  position: relative;
+  flex: none;
+  width: min(140px, 36vw);
+  height: min(140px, 36vw);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  touch-action: none;
+}
+#knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+}
+#btns {
+  display: flex;
+  flex: none;
+  gap: 10px;
+  align-items: center;
+}
+#btns button {
+  flex: none;
+  width: min(72px, 18vw);
+  height: min(72px, 18vw);
+  border-radius: 50%;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.5);
+  touch-action: none;
+}
+#btns button small {
+  font-size: 11px;
+  font-weight: 400;
+  margin-top: 2px;
+}
+#btns button.on {
+  background: #c03030;
+}
+#tb-j {
+  align-self: flex-start;
+}
+
+@media (orientation: portrait) {
+  #app.touch #screen {
+    flex: 0 0 auto;
+    width: 100%;
+    aspect-ratio: 256 / 224;
+  }
+  #app.touch #touch {
+    flex: 1;
+    height: auto;
+    min-height: 0;
+  }
+}
+
+@media (orientation: landscape) {
+  #app.touch #touch {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: auto;
+    min-height: 0;
+    pointer-events: none;
+  }
+  #app.touch #dpad,
+  #app.touch #btns {
+    pointer-events: auto;
+    opacity: 0.85;
+  }
+  #app.touch #dpad {
+    width: 120px;
+    height: 120px;
+  }
+  #app.touch #btns {
+    gap: 6px;
+  }
+  #app.touch #btns button {
+    width: 54px;
+    height: 54px;
+    font-size: 18px;
+  }
+}

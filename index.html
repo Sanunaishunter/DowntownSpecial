@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <title>熱血時代劇</title>
+    <link rel="icon" href="data:," />
+  </head>
+  <body>
+    <div id="app">
+      <div id="screen">
+        <canvas id="game"></canvas>
+        <div id="net"></div>
+        <button id="leave" type="button" hidden>離開</button>
+        <div id="menu">
+          <h1>熱血時代劇</h1>
+          <p class="sub">私人雙人合作版</p>
+          <div class="row">
+            <button id="btn-local" type="button">單人練習</button>
+            <button id="btn-create" type="button">建立房間</button>
+          </div>
+          <div class="row">
+            <input id="code" maxlength="8" placeholder="房間代碼" autocomplete="off" autocapitalize="characters" spellcheck="false" />
+            <button id="btn-join" type="button">加入</button>
+          </div>
+          <p id="msg" class="msg"></p>
+          <p class="help">
+            方向：方向鍵 / WASD　拳：J 或 Z　腿：K 或 X　跳：空白鍵（A+B）<br />
+            跑步：左／右連按兩下　其餘操作見 README
+          </p>
+        </div>
+      </div>
+      <div id="touch">
+        <div id="dpad"><div id="knob"></div></div>
+        <div id="btns">
+          <button id="tb-b" type="button">B<small>腿</small></button>
+          <button id="tb-a" type="button">A<small>拳</small></button>
+          <button id="tb-j" type="button">跳<small>A+B</small></button>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/client/main.ts"></script>
+  </body>
+</html>
