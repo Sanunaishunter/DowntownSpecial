@@ -37,19 +37,20 @@ async function main() {
   const touch = matchMedia('(pointer: coarse)').matches || /[?&]touch\b/.test(location.search);
   app.classList.toggle('touch', touch);
 
+  // Specials fire by themselves when the meter is full; the buttons exist only in the manual practice mode (/?manual).
+  const q = new URLSearchParams(location.search);
+  const manual = q.has('manual');
   const specialsEl = $('specials');
-  const ICONS: Record<string, string> = {
-    beam: '<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3C9 3 4 8 4 14.5S9 27 16 27s12-6 12-12.5S23 3 16 3z" fill="#2f8a50" stroke="#fff" stroke-width="2"/><path d="M16 3v24M6 9l10 6 10-6M4 16h24M8 24l8-9 8 9" fill="none" stroke="#fff" stroke-width="1.6"/></svg>',
-    volley: '<svg viewBox="0 0 32 32" aria-hidden="true"><rect x="6" y="9" width="20" height="16" rx="5" fill="#f2b484" stroke="#fff" stroke-width="2"/><path d="M12 9v8M16 9v8M20 9v8M6 18h20" stroke="#8a4a20" stroke-width="1.6" fill="none"/></svg>',
-  };
-  for (const sp of SPECIALS.filter((x) => x.implemented)) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.id = `sp-${sp.id}`;
-    b.title = sp.name;
-    b.innerHTML = ICONS[sp.key] ?? sp.name;
-    specialsEl.appendChild(b);
-    touchApi.bind(b, sp.bit);
+  if (manual) {
+    for (const sp of SPECIALS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.id = `sp-${sp.id}`;
+      b.title = sp.name;
+      b.textContent = sp.name.slice(0, 2);
+      specialsEl.appendChild(b);
+      touchApi.bind(b, sp.bit);
+    }
   }
 
   const assets = new Assets();
@@ -105,8 +106,7 @@ async function main() {
   };
 
   // Practice parameters for single-player: /?mp=100 starts with a full meter, /?weapon=1..5 starts armed.
-  const q = new URLSearchParams(location.search);
-  const practice = { mp: Number(q.get('mp')) || 0, weapon: Number(q.get('weapon')) || 0 };
+  const practice = { mp: Number(q.get('mp')) || 0, weapon: Number(q.get('weapon')) || 0, manual };
   $('btn-local').onclick = () => start(new LocalSession(input, practice));
   $('btn-create').onclick = () => void connect('create');
   const join = () => {
@@ -150,9 +150,11 @@ async function main() {
       const mine = snap?.sl[session.mySlot()];
       const me = snap && mine ? snap.f.find((q) => q.i === mine.f) : undefined;
       const ready = !!me && me.e >= MP_MAX && me.s !== 18;
-      specialsEl.classList.toggle('ready', ready);
-      if (ready && !touch) hint = SPECIALS.filter((x) => x.implemented).map((x) => `[${x.id + 1}] ${x.name}`).join('   ');
-      else if (session instanceof NetSession && snap && snap.sl.filter((s) => s.a).length < 2) {
+      if (manual) {
+        specialsEl.classList.toggle('ready', ready);
+        if (ready && !touch) hint = SPECIALS.map((x) => `[${x.id + 1}] ${x.name}`).join('  ');
+      }
+      if (!hint && session instanceof NetSession && snap && snap.sl.filter((s) => s.a).length < 2) {
         hint = '把網址傳給朋友，等他加入…';
       }
     }

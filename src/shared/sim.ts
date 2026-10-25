@@ -1,6 +1,6 @@
 import { Btn, GRAVITY, GROUND_MAX, GROUND_MIN, JUMP_V, MAX_PLAYERS, SCREEN_W, SPECIAL_MASK, STAGE_W } from './constants';
 import { DEFS, PLAYER_DEFS } from './defs';
-import { BEAM, MP_MAX, MP_PER_HIT, MP_PER_KNOCKDOWN, VOLLEY } from './specials';
+import { AURA, BEAM, HALO, MP_MAX, MP_PER_HIT, MP_PER_KNOCKDOWN, SHIELD, SP, SPECIALS, VOLLEY } from './specials';
 import { STAGE, type WaveDef } from './stage';
 import { St, type Fighter, type PlayerInput, type Snapshot, type World } from './types';
 import { BULLET, UNLIMITED, WEAPONS, type AtkDef } from './weapons';
@@ -78,6 +78,11 @@ function mkFighter(w: World, def: string, slot: number, x: number, y: number): F
     volley: 0,
     volleyCd: 0,
     cast: 0,
+    sp: [0, 0, 0, 0, 0, 0],
+    aura: 0,
+    shield: 0,
+    halo: 0,
+    spOn: 0,
   };
 }
 
@@ -97,6 +102,7 @@ export function createWorld(seed = 1): World {
     locked: false,
     status: 0,
     statusT: 0,
+    manual: false,
     slots: Array.from({ length: MAX_PLAYERS }, () => ({ a: 0 as const, lives: 3, score: 0, fid: 0, rt: 0 })),
   };
 }
@@ -184,10 +190,16 @@ function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
   const d = DEFS[f.def];
   if (f.inv > 0) f.inv--;
   if (f.tapT > 0) f.tapT--;
+  for (let i = 0; i < f.sp.length; i++) if (f.sp[i] > 0) f.sp[i]--;
+  if (f.aura > 0) f.aura--;
+  if (f.shield > 0) f.shield--;
+  if (f.halo > 0) f.halo--;
+  const rooted = f.shield > 0;
 
   const act = f.st === St.Idle || f.st === St.Walk || f.st === St.Run || f.st === St.Jump || f.st === St.Hold || f.st === St.Land;
-  const dx = (held & Btn.Right ? 1 : 0) - (held & Btn.Left ? 1 : 0);
-  const dy = (held & Btn.Down ? 1 : 0) - (held & Btn.Up ? 1 : 0);
+  const rawDx = (held & Btn.Right ? 1 : 0) - (held & Btn.Left ? 1 : 0);
+  const dx = rooted ? 0 : rawDx;
+  const dy = rooted ? 0 : (held & Btn.Down ? 1 : 0) - (held & Btn.Up ? 1 : 0);
 
   let pr = pressed & AB;
   if (act) {
@@ -207,7 +219,7 @@ function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
     const grounded = f.z === 0 && f.st !== St.Jump;
     if (pressed & (Btn.Left | Btn.Right)) {
       const dir = pressed & Btn.Right ? 1 : -1;
-      if (grounded && f.st !== St.Hold && f.tapDir === dir && f.tapT > 0) {
+      if (grounded && !rooted && f.st !== St.Hold && f.tapDir === dir && f.tapT > 0) {
         setSt(f, St.Run);
         f.face = dir;
         f.tapT = 0;
@@ -227,6 +239,7 @@ function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
         if (f.st !== St.Land) f.st = St.Idle;
         f.vx = 0;
         f.vy = 0;
+        if (rooted && rawDx) f.face = rawDx > 0 ? 1 : -1;
       }
     } else if (f.st === St.Run) {
       if (dx === f.face) {
@@ -263,11 +276,18 @@ function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
   }
   if (f.cast > 0) f.cast--;
   if (f.volley > 0) tickVolley(w, f);
-  if ((pressed & SPECIAL_MASK) && f.mp >= MP_MAX && f.volley === 0 && (f.st === St.Idle || f.st === St.Walk || f.st === St.Run || f.st === St.Land)) {
-    startSpecial(f, pressed);
+  if (f.mp >= MP_MAX && canStartSpecial(f)) {
+    if (w.manual) {
+      const m = SPECIALS.find((s) => pressed & s.bit & SPECIAL_MASK);
+      if (m) triggerSpecial(w, f, m.id);
+    } else {
+      const id = pickSpecial(w, f);
+      if (id >= 0) triggerSpecial(w, f, id);
+    }
   }
   if (f.st === St.Shoot && f.t >= 9 && held & Btn.A && !(held & Btn.B) && f.wn > 0) setSt(f, St.Shoot);
   updateBody(w, f);
+  updateMeter(f);
 }
 
 function resolveAction(w: World, f: Fighter, a: boolean, b: boolean, dx: number) {
@@ -281,6 +301,7 @@ function resolveAction(w: World, f: Fighter, a: boolean, b: boolean, dx: number)
       f.vy = 0;
       return;
     }
+    if (f.shield > 0) return;
     const run = f.st === St.Run;
     const d = DEFS[f.def];
     setSt(f, St.Jump);
@@ -634,6 +655,10 @@ function die(w: World, f: Fighter) {
     f.wn = 0;
     f.mp = 0;
     f.volley = 0;
+    f.aura = 0;
+    f.shield = 0;
+    f.halo = 0;
+    f.spOn = 0;
   } else {
     if (f.lastSlot >= 0 && w.slots[f.lastSlot]) w.slots[f.lastSlot].score += DEFS[f.def].score;
     dropOnDeath(w, f);
@@ -643,6 +668,16 @@ function die(w: World, f: Fighter) {
 // ---------- combat ----------
 
 function hit(w: World, t: Fighter, srcSlot: number, dmg: number, kbx: number, knock: boolean, launch: number, dir: number, gain = true) {
+  if (t.shield > 0 && isPlayer(t)) {
+    // 聖盾: a third of the damage and no flinching, unless it would still be lethal
+    dmg = Math.max(1, Math.round(dmg / (1 + SHIELD.def)));
+    if (t.hp - dmg > 0) {
+      t.hp -= dmg;
+      t.combo = 0;
+      w.ev.push([t.x, t.y, t.z + 14, 3]);
+      return;
+    }
+  }
   if (t.holding) dropHeld(w, t);
   t.pend = 0;
   t.pendT = 0;
@@ -686,7 +721,7 @@ function applyAttacks(w: World) {
       const e = byId(w, a.holding);
       if (e) e.hp = Math.max(1, e.hp - 6);
     }
-    const mul = DEFS[a.def].dmg;
+    const mul = DEFS[a.def].dmg * (a.aura > 0 ? AURA.mult : 1);
     for (const t of w.fighters) {
       if (t === a || t.heldBy || isPlayer(t) === isPlayer(a)) continue;
       if (a.hits.includes(t.id)) continue;
@@ -802,28 +837,104 @@ function dropOnDeath(w: World, f: Fighter) {
 function gainEnergy(w: World, slot: number, n: number) {
   const s = w.slots[slot];
   const p = s && s.a ? byId(w, s.fid) : undefined;
-  if (!p || p.st === St.Beam || p.volley > 0) return;
+  if (!p || specialActive(p)) return;
   p.mp = Math.min(MP_MAX, p.mp + n);
 }
 
-function startSpecial(f: Fighter, pressed: number) {
-  if (pressed & Btn.S1) {
-    setSt(f, St.Beam);
-    f.vx = 0;
-    f.vy = 0;
-    f.pend = 0;
-    f.buf = 0;
-    f.bufT = 0;
-  } else if (pressed & Btn.S2) {
-    f.volley = VOLLEY.shots;
-    f.volleyCd = 0;
+function slotMul(w: World, slot: number) {
+  const s = w.slots[slot];
+  const p = s && s.a ? byId(w, s.fid) : undefined;
+  return p && p.aura > 0 ? AURA.mult : 1;
+}
+
+/** True while a timed special is running; the meter then shows how much of it is left. */
+function specialActive(f: Fighter) {
+  return f.st === St.Beam || f.volley > 0 || f.aura > 0 || f.shield > 0;
+}
+
+function canStartSpecial(f: Fighter) {
+  return f.hp > 0 && f.z === 0 && !f.holding && !specialActive(f) && (f.st === St.Idle || f.st === St.Walk || f.st === St.Run || f.st === St.Land);
+}
+
+/** Random pick among the specials that are not cooling down (-1 = none available yet). */
+function pickSpecial(w: World, f: Fighter): number {
+  const weights = SPECIALS.map((s) => {
+    if (f.sp[s.id] > 0) return 0;
+    // a heal at nearly full health is wasted, so it is much less likely then
+    return s.id === SP.Halo && f.hp > f.maxHp * 0.85 ? s.weight * 0.25 : s.weight;
+  });
+  const total = weights.reduce((a, b) => a + b, 0);
+  if (total <= 0) return -1;
+  let r = rand(w) * total;
+  for (let i = 0; i < weights.length; i++) {
+    if (r < weights[i]) return i;
+    r -= weights[i];
+  }
+  return weights.findIndex((x) => x > 0);
+}
+
+function triggerSpecial(w: World, f: Fighter, id: number) {
+  f.pend = 0;
+  f.buf = 0;
+  f.bufT = 0;
+  f.mp = 0;
+  f.spOn = 1;
+  switch (id) {
+    case SP.Beam:
+      setSt(f, St.Beam);
+      f.vx = 0;
+      f.vy = 0;
+      break;
+    case SP.Volley:
+      f.volley = VOLLEY.shots;
+      f.volleyCd = 0;
+      break;
+    case SP.Halo:
+      f.hp = f.maxHp;
+      f.halo = HALO.vis;
+      w.ev.push([f.x, f.y, 14, 1]);
+      break;
+    case SP.Aura:
+      f.aura = AURA.dur;
+      break;
+    case SP.Shield:
+      f.shield = SHIELD.dur;
+      f.vx = 0;
+      f.vy = 0;
+      if (f.st === St.Run || f.st === St.Walk) setSt(f, St.Idle);
+      break;
+    case SP.Ultimate:
+      // every cooldown is wiped, then everything fires at once
+      f.sp.fill(0);
+      for (const k of [SP.Beam, SP.Volley, SP.Halo, SP.Aura, SP.Shield]) triggerSpecial(w, f, k);
+      break;
+  }
+  f.sp[id] = SPECIALS[id].cooldown;
+}
+
+/** Keeps the energy bar draining while a timed special runs, and empties it when they are over. */
+function updateMeter(f: Fighter) {
+  if (f.hp <= 0) return;
+  let frac = -1;
+  if (f.st === St.Beam) {
+    const fireT = f.t - BEAM.charge;
+    frac = Math.max(frac, fireT < 0 ? 1 : fireT < BEAM.fire ? 1 - fireT / BEAM.fire : 0);
+  }
+  if (f.volley > 0) frac = Math.max(frac, f.volley / VOLLEY.shots);
+  if (f.aura > 0) frac = Math.max(frac, f.aura / AURA.dur);
+  if (f.shield > 0) frac = Math.max(frac, f.shield / SHIELD.dur);
+  if (frac >= 0) {
+    f.mp = Math.round(MP_MAX * frac);
+    f.spOn = 1;
+  } else if (f.spOn) {
+    f.mp = 0;
+    f.spOn = 0;
   }
 }
 
 function tickVolley(w: World, f: Fighter) {
   if (f.st === St.Hurt || f.st === St.Down || f.st === St.Dead || f.st === St.GetUp || f.st === St.Held) {
     f.volley = 0;
-    f.mp = 0;
     return;
   }
   if (--f.volleyCd > 0) return;
@@ -831,7 +942,6 @@ function tickVolley(w: World, f: Fighter) {
   f.volley--;
   f.volleyCd = VOLLEY.gap;
   f.cast = 8;
-  f.mp = f.volley * (MP_MAX / VOLLEY.shots);
 }
 
 function fireBullet(w: World, f: Fighter) {
@@ -850,8 +960,9 @@ function updateShots(w: World) {
       if (isPlayer(t) || !vulnerable(t)) continue;
       if (Math.abs(t.x - s.x) > 9 || Math.abs(t.y - s.y) > 8 || Math.abs(t.z + 14 - s.z) > 18) continue;
       const dir = s.vx >= 0 ? 1 : -1;
-      if (s.kind === 1) hit(w, t, s.owner - 1, VOLLEY.dmg, 2.2, true, 2.4, dir, false);
-      else hit(w, t, s.owner - 1, BULLET.dmg, BULLET.kbx, false, 0, dir, true);
+      const mul = slotMul(w, s.owner - 1);
+      if (s.kind === 1) hit(w, t, s.owner - 1, Math.round(VOLLEY.dmg * mul), 2.2, true, 2.4, dir, false);
+      else hit(w, t, s.owner - 1, Math.round(BULLET.dmg * mul), BULLET.kbx, false, 0, dir, true);
       s.life = 0;
       break;
     }
@@ -865,18 +976,12 @@ function updateBeam(w: World, f: Fighter) {
   f.inv = Math.max(f.inv, 2);
   const fireT = f.t - BEAM.charge;
   if (fireT >= BEAM.fire + BEAM.recover) {
-    f.mp = 0;
     setSt(f, St.Idle);
     return;
   }
-  if (fireT >= BEAM.fire) {
-    f.mp = 0;
-    return;
-  }
-  if (fireT < 0) return;
-  f.mp = Math.round(MP_MAX * (1 - fireT / BEAM.fire));
+  if (fireT >= BEAM.fire || fireT < 0) return;
   if (fireT % BEAM.pulse !== 0) return;
-  const dmg = Math.max(1, Math.round(BEAM.dmg * DEFS[f.def].dmg));
+  const dmg = Math.max(1, Math.round(BEAM.dmg * DEFS[f.def].dmg * (f.aura > 0 ? AURA.mult : 1)));
   for (const t of w.fighters) {
     if (isPlayer(t) || t.heldBy) continue;
     if (t.st === St.Down || t.st === St.GetUp || t.st === St.Dead) continue;
@@ -1005,6 +1110,8 @@ export function snapshot(w: World): Snapshot {
       e: Math.round(f.mp),
       n: f.wn,
       c: f.cast,
+      b: (f.aura > 0 ? 1 : 0) | (f.shield > 0 ? 2 : 0) | (f.halo > 0 ? 4 : 0) | ((f.aura > 0 && f.aura < 120) || (f.shield > 0 && f.shield < 120) ? 8 : 0),
+      k: f.sp.reduce((m, c, i) => (c > 0 ? m | (1 << i) : m), 0),
     })),
     it: w.items.map((i) => ({ i: i.id, k: i.kind, x: r1(i.x), y: r1(i.y), z: r1(i.z) })),
     sh: w.shots.map((s) => ({ k: s.kind, x: r1(s.x), y: r1(s.y), z: r1(s.z), r: (s.vx >= 0 ? 1 : -1) as 1 | -1 })),

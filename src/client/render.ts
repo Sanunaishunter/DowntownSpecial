@@ -1,6 +1,6 @@
 import { SCREEN_H, SCREEN_W } from '../shared/constants';
 import { DEFS } from '../shared/defs';
-import { BEAM, MP_MAX } from '../shared/specials';
+import { BEAM, HALO, MP_MAX, SPECIALS } from '../shared/specials';
 import { St, type GameEvent, type SnapFighter, type SnapItem, type Snapshot } from '../shared/types';
 import { UNLIMITED, WEAPONS, WID } from '../shared/weapons';
 import type { Assets } from './assets';
@@ -29,6 +29,8 @@ export class Renderer {
   private s = 2;
   private fx: Fx[] = [];
   private sprites = new PixelSprites();
+  private buffT0 = new Map<string, number>();
+  private fxCanvas = document.createElement('canvas');
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -80,9 +82,30 @@ export class Renderer {
     const ox = Math.round(f.x - cam);
     const oy = Math.round(f.y);
     shadow(ctx, ox, oy, f.z, f.s === St.Down || dead || f.s === St.Held ? 14 : 9);
+    const since = (kind: string, on: boolean) => {
+      const key = `${f.i}:${kind}`;
+      if (!on) {
+        this.buffT0.delete(key);
+        return 0;
+      }
+      if (!this.buffT0.has(key)) this.buffT0.set(key, now);
+      return now - this.buffT0.get(key)!;
+    };
+    const haloMs = since('halo', !!(f.b & 4));
+    const auraMs = since('aura', !!(f.b & 1));
+    const shieldMs = since('shield', !!(f.b & 2));
+    if (f.b & 4) drawHaloLight(ctx, ox, oy, haloMs, (HALO.vis / 60) * 1000, f.i);
+    if (f.b & 1) this.drawAura(f, ox, oy, now, auraMs);
     ctx.save();
     ctx.translate(ox, oy - Math.round(f.z));
     ctx.scale(f.r, 1);
+    this.paint(ctx, f);
+    ctx.restore();
+    if (f.b & 2) drawShield(ctx, ox + f.r * 15, oy - Math.round(f.z), shieldMs, now, !!(f.b & 8));
+  }
+
+  // Draws the fighter at the origin of an already translated and flipped context.
+  private paint(ctx: CanvasRenderingContext2D, f: SnapFighter) {
     const hasArt = f.w > 1 && this.assets.hasArmed(f.d, f.w);
     const art = artFor(f, hasArt);
     const drawn = this.assets.draw(ctx, f.d, f.s, art.t, art.weapon, art.anim);
@@ -90,8 +113,148 @@ export class Renderer {
     else if (drawn === 1 && f.w === WID.Stick && (f.s === St.Idle || f.s === St.Walk || f.s === St.Run || f.s === St.Jump)) drawHeldStick(ctx, f.s, f.t);
     if (!hasArt) drawWeaponInHand(ctx, f);
     else if (f.s === St.Shoot && f.t >= 2 && f.t <= 5) drawMuzzleFlash(ctx, this.assets.muzzle(f.d));
+  }
+
+  // 爆氣: a flickering gold outline around the whole body plus flames rising from it.
+  private drawAura(f: SnapFighter, ox: number, oy: number, now: number, ms: number) {
+    const ctx = this.ctx;
+    const fade = f.b & 8 ? 0.45 + 0.4 * Math.sin(now / 45) : 1;
+    const fx = this.fxCanvas;
+    const W = 112;
+    const H = 112;
+    if (fx.width !== W) {
+      fx.width = W;
+      fx.height = H;
+    }
+    const g = fx.getContext('2d')!;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, W, H);
+    g.imageSmoothingEnabled = false;
+    g.save();
+    g.translate(W / 2, H - 20 - Math.round(f.z));
+    g.scale(f.r, 1);
+    this.paint(g, f);
+    g.restore();
+    g.globalCompositeOperation = 'source-in';
+    g.fillStyle = '#ffd23a';
+    g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = 'source-over';
+    const pulse = 2 + Math.round(Math.sin(now / 55) + Math.sin(now / 37));
+    const x0 = ox - W / 2;
+    const y0 = oy - (H - 20);
+    ctx.save();
+    // flame tongues licking up behind the body
+    ctx.globalAlpha = 0.7 * fade * Math.min(1, ms / 150);
+    const base = oy - Math.round(f.z) - 10;
+    for (let i = 0; i < 7; i++) {
+      const bx = ox + (i - 3) * 5;
+      const hgt = 16 + Math.round(10 * Math.sin(now / 70 + i * 1.9)) + (i % 2 ? 6 : 0) - Math.abs(i - 3) * 2;
+      ctx.fillStyle = '#ffb81c';
+      ctx.beginPath();
+      ctx.moveTo(bx - 4, base);
+      ctx.lineTo(bx + 4, base);
+      ctx.lineTo(bx + (i % 3) - 1, base - hgt - 14);
+      ctx.fill();
+      ctx.fillStyle = '#fff2a0';
+      ctx.beginPath();
+      ctx.moveTo(bx - 2, base);
+      ctx.lineTo(bx + 2, base);
+      ctx.lineTo(bx, base - hgt - 4);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 0.6 * fade * Math.min(1, ms / 150);
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1]]) {
+      ctx.drawImage(fx, x0 + dx * (pulse + 2), y0 + dy * (pulse + 2) - 1);
+    }
+    ctx.globalAlpha = 0.75 * fade;
+    ctx.drawImage(fx, x0 + 0, y0 - 1);
+    // flames: deterministic particles that rise and shrink
+    for (let k = 0; k < 14; k++) {
+      const life = ((now / 600 + k * 0.137 + f.i * 0.31) % 1);
+      const px = ox + Math.round(Math.sin(k * 12.9898 + f.i) * 12) + Math.round(Math.sin(life * 6 + k) * 2);
+      const py = oy - Math.round(f.z) - 2 - Math.round(life * 40);
+      const sz = life < 0.35 ? 3 : life < 0.7 ? 2 : 1;
+      ctx.fillStyle = life < 0.5 ? '#fff6b0' : '#ffc030';
+      ctx.fillRect(px - 1, py, sz, sz + 1);
+    }
     ctx.restore();
   }
+}
+
+// 光環: a column of golden light falling from the sky onto the hero, with sparkles rising inside it.
+function drawHaloLight(ctx: CanvasRenderingContext2D, ox: number, oy: number, ms: number, total: number, seed: number) {
+  const drop = Math.min(1, ms / 220);
+  const fade = Math.min(1, Math.max(0, (total - ms) / 450));
+  const top = 0;
+  const bottom = oy + 2;
+  const h = Math.round((bottom - top) * drop);
+  const wob = Math.round(Math.sin(ms / 70) * 1.5);
+  ctx.save();
+  ctx.globalAlpha = fade;
+  const layers: [string, number][] = [
+    ['rgba(255,214,90,0.22)', 32 + wob * 2],
+    ['rgba(255,226,120,0.34)', 24 + wob],
+    ['rgba(255,240,170,0.5)', 16],
+    ['rgba(255,252,222,0.8)', 8],
+  ];
+  for (const [c, w] of layers) {
+    ctx.fillStyle = c;
+    ctx.fillRect(ox - Math.floor(w / 2), top, w, h);
+  }
+  // ground ring
+  if (drop >= 1) {
+    ctx.fillStyle = 'rgba(255,236,150,0.45)';
+    ctx.beginPath();
+    ctx.ellipse(ox, oy, 20 + wob, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,230,0.8)';
+    ctx.beginPath();
+    ctx.ellipse(ox, oy, 11, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  for (let k = 0; k < 16; k++) {
+    const life = (ms / 900 + k * 0.0625 + seed * 0.13) % 1;
+    const px = ox + Math.round(Math.sin(k * 7.3 + seed) * 11);
+    const py = oy - Math.round(life * 54);
+    ctx.fillStyle = life < 0.5 ? '#ffffff' : '#ffe27a';
+    ctx.fillRect(px, py, 1 + (k % 2), 2);
+  }
+  ctx.restore();
+}
+
+// 聖盾: the light takes the shape of a big Roman scutum held in front of the hero.
+function drawShield(ctx: CanvasRenderingContext2D, x: number, y: number, ms: number, now: number, ending: boolean) {
+  const grow = Math.min(1, ms / 180);
+  const w = Math.max(4, Math.round(20 * grow));
+  const h = Math.max(6, Math.round(38 * grow));
+  const cx = Math.round(x);
+  const top = y - h - 2;
+  const pulse = 0.82 + 0.12 * Math.sin(now / 90);
+  ctx.save();
+  ctx.globalAlpha = (ending ? 0.35 + 0.5 * Math.abs(Math.sin(now / 60)) : 1) * pulse;
+  const R = (c: string, rx: number, ry: number, rw: number, rh: number) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(cx + rx, top + ry, rw, rh);
+  };
+  const hw = Math.floor(w / 2);
+  R('rgba(255,224,110,0.28)', -hw - 3, -3, w + 6, h + 6);
+  // body with clipped corners
+  R('#fff3b0', -hw + 2, 0, w - 4, h);
+  R('#fff3b0', -hw, 2, w, h - 4);
+  R('#f0c040', -hw + 2, 2, w - 4, h - 4);
+  R('#f0c040', -hw + 1, 3, w - 2, h - 6);
+  // darker inner edge and cross bands of the scutum
+  R('#c08a1c', -hw + 3, 3, 1, h - 6);
+  R('#c08a1c', hw - 4, 3, 1, h - 6);
+  R('#d9a62c', -1, 3, 2, h - 6);
+  R('#d9a62c', -hw + 3, Math.floor(h / 2) - 1, w - 6, 2);
+  // central boss
+  R('#fffbe0', -3, Math.floor(h / 2) - 3, 6, 6);
+  R('#f0c040', -1, Math.floor(h / 2) - 1, 2, 2);
+  // wing-like marks above and below the boss
+  R('#fff3b0', -hw + 4, 5, w - 8, 1);
+  R('#fff3b0', -hw + 4, h - 6, w - 8, 1);
+  ctx.restore();
 }
 
 function shadow(ctx: CanvasRenderingContext2D, x: number, y: number, z: number, rx: number) {
@@ -321,7 +484,7 @@ function drawSpark(ctx: CanvasRenderingContext2D, e: Fx, cam: number, k: number)
   const cx = e.x - cam;
   const cy = e.y - e.z;
   const len = (e.k ? 9 : 6) * (0.5 + k);
-  ctx.strokeStyle = e.k === 2 ? '#c8c8d0' : e.k ? '#ffe060' : '#ffffff';
+  ctx.strokeStyle = e.k === 3 ? '#fff0a0' : e.k === 2 ? '#c8c8d0' : e.k ? '#ffe060' : '#ffffff';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   for (let i = 0; i < 8; i++) {
@@ -412,15 +575,17 @@ function bar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, hp:
   ctx.fillRect(x, y, Math.round(w * k), 5);
 }
 
-function energyBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, e: number, now: number) {
+function energyBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, e: number, now: number, gold = false) {
   const k = Math.max(0, Math.min(1, e / MP_MAX));
   ctx.fillStyle = '#000';
   ctx.fillRect(x - 1, y - 1, w + 2, 5);
   ctx.fillStyle = '#10243e';
   ctx.fillRect(x, y, w, 3);
-  ctx.fillStyle = k >= 1 && Math.floor(now / 110) % 2 === 0 ? '#ffffff' : '#38c8ff';
+  ctx.fillStyle = k >= 1 && Math.floor(now / 110) % 2 === 0 ? '#ffffff' : gold ? '#ffd23a' : '#38c8ff';
   ctx.fillRect(x, y, Math.round(w * k), 3);
 }
+
+const PIP_COLORS = ['#3fd07a', '#ff9a3c', '#fff08a', '#ffd23c', '#7fd0ff', '#ff6bd6'];
 
 function drawHud(ctx: CanvasRenderingContext2D, snap: Snapshot, o: DrawOpts) {
   snap.sl.forEach((s, i) => {
@@ -431,7 +596,17 @@ function drawHud(ctx: CanvasRenderingContext2D, snap: Snapshot, o: DrawOpts) {
     const name = DEFS[f?.d ?? ''] ? DEFS[f!.d].name : `P${i + 1}`;
     text(ctx, name + (i === o.mySlot ? ' ◀' : ''), x, 3);
     bar(ctx, x, 14, 70, f ? f.h : 0, f ? f.m : 1);
-    energyBar(ctx, x, 21, 70, f ? f.e : 0, o.now);
+    energyBar(ctx, x, 21, 70, f ? f.e : 0, o.now, !!f && (f.b & 3) !== 0);
+    if (f) {
+      // one pip per special: lit = ready, dark = cooling down
+      SPECIALS.forEach((sp, n) => {
+        const px = x + 70 - (SPECIALS.length - n) * 7 + 1;
+        ctx.fillStyle = '#000';
+        ctx.fillRect(px - 1, 3, 6, 6);
+        ctx.fillStyle = f.k & (1 << n) ? '#30303c' : PIP_COLORS[n];
+        ctx.fillRect(px, 4, 4, 4);
+      });
+    }
     text(ctx, `x${Math.max(0, s.l)}  ${String(s.p).padStart(6, '0')}`, x, 26, '#ffd070');
     if (f && f.w) {
       const wd = WEAPONS[f.w];

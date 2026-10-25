@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { Btn } from '../src/shared/constants';
 import { addPlayer, createWorld, snapshot, step } from '../src/shared/sim';
-import { BEAM, MP_MAX, VOLLEY } from '../src/shared/specials';
+import { AURA, BEAM, MP_MAX, SHIELD, SP, SPECIALS, VOLLEY } from '../src/shared/specials';
 import { St, type Fighter, type PlayerInput, type World } from '../src/shared/types';
 import { WEAPONS, WID } from '../src/shared/weapons';
 
 const none: PlayerInput = { held: 0, pressed: 0 };
 
-function setup() {
-  const w = createWorld(11);
+function setup(seed = 11, manual = true) {
+  const w = createWorld(seed);
+  w.manual = manual;
   addPlayer(w, 0);
   for (let i = 0; i < 5; i++) step(w, [none, undefined]);
   w.stageT = -100000;
@@ -43,6 +44,7 @@ function foe(w: World, dx: number, dy = 0, def = 'saburo', kind: Fighter['kind']
     mp: 0,
     volley: 0,
     cast: 0,
+    sp: [0, 0, 0, 0, 0, 0],
   };
   w.fighters.push(f);
   return f;
@@ -314,5 +316,190 @@ describe('snapshot', () => {
     expect(me.e).toBe(40);
     expect(me.n).toBeLessThanOrEqual(11);
     expect(s.sh.length).toBeGreaterThan(0);
+  });
+});
+
+// Which special fired right after the meter filled (read from what it started).
+function fired(p: Fighter) {
+  const ids: number[] = [];
+  if (p.st === St.Beam) ids.push(SP.Beam);
+  if (p.volley > 0) ids.push(SP.Volley);
+  if (p.halo > 0) ids.push(SP.Halo);
+  if (p.aura > 0) ids.push(SP.Aura);
+  if (p.shield > 0) ids.push(SP.Shield);
+  return ids;
+}
+
+describe('random specials', () => {
+  it('a full meter fires one special by itself, and all of them can come up', () => {
+    const seen = new Set<number>();
+    for (let seed = 1; seed <= 300; seed++) {
+      const w = setup(seed, false);
+      const p = player(w);
+      p.hp = 40;
+      p.mp = MP_MAX;
+      run(w, 2);
+      const ids = fired(p);
+      expect(ids.length).toBeGreaterThan(0);
+      if (ids.length === 5) seen.add(SP.Ultimate);
+      else {
+        expect(ids.length).toBe(1);
+        seen.add(ids[0]);
+      }
+      expect(p.sp.some((c) => c > 0)).toBe(true);
+    }
+    expect([...seen].sort()).toEqual([0, 1, 2, 3, 4, 5]);
+  });
+
+  it('does not fire without a full meter, and waits while another special runs', () => {
+    const w = setup(5, false);
+    const p = player(w);
+    p.mp = MP_MAX - 1;
+    run(w, 20);
+    expect(fired(p)).toEqual([]);
+    p.mp = MP_MAX;
+    run(w, 1);
+    const first = fired(p);
+    expect(first.length).toBeGreaterThan(0);
+    p.mp = MP_MAX;
+    const sp = [...p.sp];
+    run(w, 1);
+    expect(p.sp).toEqual(sp.map((c) => Math.max(0, c - 1)));
+  });
+
+  it('a special that is cooling down is never picked again', () => {
+    for (let seed = 1; seed <= 100; seed++) {
+      const w = setup(seed, false);
+      const p = player(w);
+      p.hp = 10;
+      p.sp = [0, 0, 0, 0, 0, 0].map((_, i) => (i === SP.Halo || i === SP.Ultimate ? 0 : 500));
+      p.mp = MP_MAX;
+      run(w, 2);
+      expect(fired(p).length).toBeGreaterThan(0);
+      expect(p.halo > 0 || p.sp[SP.Ultimate] > 400).toBe(true);
+    }
+  });
+
+  it('cooldowns run down and the special can come back', () => {
+    const w = setup(3, false);
+    const p = player(w);
+    p.sp = [1, 1, 1, 1, 1, 1].map((c, i) => (i === SP.Aura ? 3 : c));
+    run(w, 5);
+    expect(p.sp.every((c) => c === 0)).toBe(true);
+  });
+
+  it('a hurt hero is far more likely to be healed than a healthy one', () => {
+    let hurt = 0;
+    let fine = 0;
+    for (let seed = 1; seed <= 400; seed++) {
+      for (const [hp, set] of [[30, 'hurt'], [100, 'fine']] as const) {
+        const w = setup(seed, false);
+        const p = player(w);
+        p.hp = hp;
+        p.mp = MP_MAX;
+        run(w, 2);
+        if (p.halo > 0 && fired(p).length === 1) set === 'hurt' ? hurt++ : fine++;
+      }
+    }
+    expect(hurt).toBeGreaterThan(fine * 2);
+  });
+});
+
+describe('光環 / 爆氣 / 聖盾 / 主角威能', () => {
+  const trigger = (w: World, bit: number) => {
+    player(w).mp = MP_MAX;
+    press(w, bit);
+  };
+
+  it('光環 refills health at once', () => {
+    const w = setup();
+    const p = player(w);
+    p.hp = 7;
+    trigger(w, Btn.S3);
+    expect(p.hp).toBe(p.maxHp);
+    expect(p.halo).toBeGreaterThan(0);
+    expect(p.mp).toBe(0);
+    expect(p.sp[SP.Halo]).toBeGreaterThan(0);
+  });
+
+  it('爆氣 doubles damage for twenty seconds, then wears off', () => {
+    const hitFor = (aura: boolean) => {
+      const w = setup();
+      const p = player(w);
+      p.face = 1;
+      const e = foe(w, 14, 0, 'saburo', 'grunt', 9999);
+      if (aura) {
+        trigger(w, Btn.S4);
+        expect(p.aura).toBe(AURA.dur - 0);
+      }
+      press(w, Btn.A);
+      run(w, 20);
+      return 9999 - e.hp;
+    };
+    expect(hitFor(true)).toBe(hitFor(false) * AURA.mult);
+    const w = setup();
+    trigger(w, Btn.S4);
+    run(w, AURA.dur + 2);
+    expect(player(w).aura).toBe(0);
+    expect(player(w).mp).toBe(0);
+  });
+
+  it('聖盾 cuts damage to a third, stops flinching, and roots the hero', () => {
+    const takeHit = (shield: boolean) => {
+      const w = setup();
+      const p = player(w);
+      p.face = 1;
+      p.inv = 0;
+      if (shield) trigger(w, Btn.S5);
+      const e = foe(w, -14, 0, 'saburo', 'grunt', 100);
+      e.face = 1;
+      e.aiT = 0;
+      e.cd = 0;
+      run(w, 40);
+      return { lost: p.maxHp - p.hp, st: p.st };
+    };
+    const plain = takeHit(false);
+    const shielded = takeHit(true);
+    expect(plain.lost).toBeGreaterThan(0);
+    expect(shielded.lost).toBeGreaterThan(0);
+    expect(shielded.lost).toBeLessThanOrEqual(Math.ceil(plain.lost / (1 + SHIELD.def)) + 1);
+    expect([St.Hurt, St.Down]).not.toContain(shielded.st);
+
+    const w = setup();
+    const p = player(w);
+    trigger(w, Btn.S5);
+    const x0 = p.x;
+    const y0 = p.y;
+    run(w, 30, { held: Btn.Right | Btn.Down, pressed: 0 });
+    expect(p.x).toBe(x0);
+    expect(p.y).toBe(y0);
+    run(w, SHIELD.dur);
+    expect(p.shield).toBe(0);
+    const x1 = p.x;
+    run(w, 30, { held: Btn.Right, pressed: 0 });
+    expect(p.x).toBeGreaterThan(x1);
+  });
+
+  it('主角威能 wipes the cooldowns and fires everything at once', () => {
+    const w = setup();
+    const p = player(w);
+    p.hp = 20;
+    p.sp = [900, 900, 900, 900, 900, 0];
+    p.face = 1;
+    trigger(w, Btn.S6);
+    expect(p.hp).toBe(p.maxHp);
+    expect(p.st).toBe(St.Beam);
+    expect(p.volley).toBeGreaterThan(0);
+    expect(p.aura).toBeGreaterThan(0);
+    expect(p.shield).toBeGreaterThan(0);
+    for (const s of SPECIALS) expect(p.sp[s.id]).toBe(s.cooldown);
+  });
+
+  it('shows the buffs and cooldowns in the snapshot', () => {
+    const w = setup();
+    trigger(w, Btn.S4);
+    const f = snapshot(w).f.find((q) => q.d === 'ichiro')!;
+    expect(f.b & 1).toBe(1);
+    expect(f.k & (1 << SP.Aura)).toBeTruthy();
   });
 });

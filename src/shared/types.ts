@@ -69,6 +69,13 @@ export interface Fighter {
   volley: number;
   volleyCd: number;
   cast: number;
+  /** per-special cooldown ticks (index = special id) */
+  sp: number[];
+  aura: number;
+  shield: number;
+  halo: number;
+  /** 1 while a timed special is running (drives the meter drain) */
+  spOn: number;
 }
 
 export interface Item {
@@ -121,6 +128,8 @@ export interface World {
   status: 0 | 1 | 2;
   statusT: number;
   slots: PlayerSlot[];
+  /** practice mode: S1..S6 trigger specials by hand (ignores the random pick and cooldowns) */
+  manual: boolean;
 }
 
 export interface PlayerInput {
@@ -144,6 +153,10 @@ export interface SnapFighter {
   e: number;
   n: number;
   c: number;
+  /** buffs: 1 aura, 2 shield, 4 halo light, 8 a buff is about to end */
+  b: number;
+  /** bit i set = special i is cooling down */
+  k: number;
 }
 
 export interface SnapShot {
