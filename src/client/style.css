@@ -109,6 +109,11 @@ input {
   margin: 0;
   color: #ffd070;
 }
+.ver {
+  margin: 2px 0 0;
+  font: 11px/1.2 monospace;
+  opacity: 0.5;
+}
 .help {
   margin: 4px 0 0;
   font-size: 12px;

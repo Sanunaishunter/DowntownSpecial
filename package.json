@@ -8,7 +8,9 @@
     "dev:server": "tsx watch src/server/main.ts",
     "dev:client": "vite",
     "build": "vite build",
-    "start": "tsx src/server/main.ts",
+    "update": "node scripts/update.mjs",
+    "start": "node scripts/update.mjs && tsx src/server/main.ts",
+    "start:offline": "tsx src/server/main.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

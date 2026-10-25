@@ -13,6 +13,7 @@ export interface ServerOptions {
   hosts: string[];
   distDir: string;
   assetsDir: string;
+  version?: string;
   log?: (msg: string) => void;
 }
 
@@ -175,7 +176,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
           }
           const slot = room.join(client);
           log(`room ${room.code} created`);
-          send({ t: 'joined', code: room.code, slot });
+          send({ t: 'joined', code: room.code, slot, ver: opts.version ?? 'dev' });
           break;
         }
         case 'join': {
@@ -191,7 +192,7 @@ export function startServer(opts: ServerOptions): Promise<RunningServer> {
             return;
           }
           log(`room ${room.code} joined slot ${slot}`);
-          send({ t: 'joined', code: room.code, slot });
+          send({ t: 'joined', code: room.code, slot, ver: opts.version ?? 'dev' });
           break;
         }
       }

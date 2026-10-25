@@ -73,6 +73,7 @@ export class NetSession implements Session {
   private pingTimer = 0;
   private slot = -1;
   code = '';
+  serverVersion = '';
   onClose: (reason: string) => void = () => {};
 
   private constructor(
@@ -115,6 +116,7 @@ export class NetSession implements Session {
           settled = true;
           sess.code = m.code;
           sess.slot = m.slot;
+          sess.serverVersion = typeof m.ver === 'string' ? m.ver : '';
           sess.startPing();
           resolve(sess);
         } else if (m.t === 'err') {

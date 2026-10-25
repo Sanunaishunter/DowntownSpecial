@@ -16,6 +16,20 @@ async function main() {
   const netInfo = $('net');
   const leave = $('leave');
   const codeInput = $<HTMLInputElement>('code');
+  $('ver').textContent = `版本 ${__APP_VERSION__}${__APP_DATE__ ? ` · ${__APP_DATE__}` : ''}`;
+
+  // Reload once when the server runs a different build than this page (guarded against loops).
+  const reloadIfStale = (serverVersion: string): boolean => {
+    if (!serverVersion || serverVersion === 'dev' || serverVersion === __APP_VERSION__) return false;
+    try {
+      if (sessionStorage.getItem('eb-reload') === serverVersion) return false;
+      sessionStorage.setItem('eb-reload', serverVersion);
+    } catch {
+      return false;
+    }
+    location.reload();
+    return true;
+  };
 
   const input = new Input();
   setupTouch(input);
@@ -64,6 +78,10 @@ async function main() {
       const s = await NetSession.connect(input, mode, code);
       s.onClose = (reason) => showMenu(reason);
       history.replaceState(null, '', `#${s.code}`);
+      if (reloadIfStale(s.serverVersion)) {
+        msg.textContent = '發現新版本，重新載入中…';
+        return;
+      }
       start(s);
     } catch (e) {
       msg.textContent = e instanceof Error ? e.message : '連線失敗';
@@ -85,6 +103,16 @@ async function main() {
     history.replaceState(null, '', location.pathname);
     showMenu();
   };
+
+  document.addEventListener('visibilitychange', async () => {
+    if (document.hidden || session) return;
+    try {
+      const v = await (await fetch('/version.json', { cache: 'no-store' })).json();
+      reloadIfStale(v.id);
+    } catch {
+      /* offline: keep the current page */
+    }
+  });
 
   const hash = location.hash.replace('#', '').trim();
   if (hash) {

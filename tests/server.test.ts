@@ -24,6 +24,7 @@ beforeAll(async () => {
     hosts: ['127.0.0.1'],
     distDir: path.join(tmp, 'dist'),
     assetsDir: path.join(tmp, 'assets'),
+    version: 'test+1',
   });
   base = `127.0.0.1:${server.ports[0]}`;
 });
@@ -98,6 +99,7 @@ describe('websocket', () => {
     a.ws.send(JSON.stringify({ t: 'create' }));
     const joinedA = await a.waitFor((m) => m.t === 'joined');
     expect(joinedA.slot).toBe(0);
+    expect(joinedA.ver).toBe('test+1');
     expect(joinedA.code).toMatch(/^[A-Z0-9]{6}$/);
 
     const b = connect();
