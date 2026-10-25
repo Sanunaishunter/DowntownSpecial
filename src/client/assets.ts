@@ -14,6 +14,7 @@ export interface SpriteDef {
   ox: number;
   oy: number;
   fps?: number;
+  muzzle?: [number, number];
   anims: Record<string, number[] | AnimDef>;
 }
 
@@ -73,6 +74,10 @@ export class Assets {
 
   has(def: string) {
     return this.sheets.has(def);
+  }
+
+  muzzle(def: string): [number, number] {
+    return this.sheets.get(def)?.def.muzzle ?? [22, -20];
   }
 
   hasArmed(def: string, weapon: number) {

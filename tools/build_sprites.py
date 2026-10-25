@@ -53,6 +53,8 @@ SHEETS = [
          ref="recover", main_only=True, gain=1.12),
     dict(file="sheet-blades.jpg", grid=(3, 2), names=["bready", "bwind", "bstrike", "sready", "sstrike", "swind"],
          scale_from="sheet-special.jpg", main_only=True, split="components", grow=0, auto_gain=True),
+    dict(file="sheet-heavy.jpg", grid=(3, 2), names=["stcarry", "stwind", "stsmash", "rready", "rfire", "rbash"],
+         scale_from="sheet-special.jpg", main_only=True, split="components", grow=0, auto_gain=True),
 ]
 
 # palette: name -> base colour; fringe entries collapse into the outline
@@ -75,6 +77,13 @@ PALETTE = [
     ("bamboo_dark", (168, 138, 72)),
     ("blade", (77, 230, 255)),
     ("blade_dark", (30, 160, 210)),
+    ("rock", (128, 128, 134)),
+    ("rock_light", (164, 164, 170)),
+    ("rock_dark", (88, 88, 96)),
+    ("metal", (52, 52, 60)),
+    ("metal_light", (100, 100, 112)),
+    ("gunwood", (136, 82, 42)),
+    ("gunwood_dark", (88, 52, 28)),
     ("fringe1", (111, 45, 91)),
     ("fringe2", (48, 20, 39)),
     ("fringe3", (27, 3, 10)),
@@ -89,6 +98,13 @@ ENTRY_SCOPE = {
     "bamboo_dark": ["bready", "bwind", "bstrike"],
     "blade": ["sready", "swind", "sstrike"],
     "blade_dark": ["sready", "swind", "sstrike"],
+    "rock": ["stcarry", "stwind", "stsmash"],
+    "rock_light": ["stcarry", "stwind", "stsmash"],
+    "rock_dark": ["stcarry", "stwind", "stsmash"],
+    "metal": ["rready", "rfire", "rbash"],
+    "metal_light": ["rready", "rfire", "rbash"],
+    "gunwood": ["rready", "rfire", "rbash"],
+    "gunwood_dark": ["rready", "rfire", "rbash"],
 }
 CANON = {k: "outline" for k in ("fringe1", "fringe2", "fringe3", "fringe4", "fringe5", "fringe6")}
 NAMES = [n for n, _ in PALETTE]
@@ -119,11 +135,12 @@ BASE_FRAMES = [
     "grab", "lift", "carry1", "carry2", "windswing", "smash",
     "charge1", "charge2", "fire1", "fire2", "recover", "cast",
     "bready", "bwind", "bstrike", "sready", "swind", "sstrike",
+    "stcarry", "stwind", "stsmash", "rready", "rfire", "rbash",
 ]
 # Armed stances per weapon suffix: the upper body of the "ready" frame is grafted onto
 # the legs of each locomotion frame. _w = stick, _w2 = bamboo sword, _w4 = energy sword.
 ARMED_BASES = ["walk1", "walk2", "walk3", "run1", "run2", "jump"]
-ARMED_SETS = {"_w": "idle_w", "_w2": "bready", "_w4": "sready"}
+ARMED_SETS = {"_w": "idle_w", "_w2": "bready", "_w3": "stcarry", "_w4": "sready", "_w5": "rready"}
 ARMED = [f"{b}{suf}" for suf in ARMED_SETS for b in ARMED_BASES]
 FRAME_ORDER = BASE_FRAMES + ARMED
 
@@ -156,7 +173,7 @@ ANIMS = {
     "shoot": (["windup", "punch", "windup"], [2, 6, 2]),
 }
 LOOPING = {"walk", "run", "hold"}
-for _suf, _idle in (("_w", "idle_w"), ("_w2", "bready"), ("_w4", "sready")):
+for _suf, _idle in (("_w", "idle_w"), ("_w2", "bready"), ("_w3", "stcarry"), ("_w4", "sready"), ("_w5", "rready")):
     ANIMS[f"idle{_suf}"] = ([_idle], [60])
     ANIMS[f"walk{_suf}"] = ([f"walk1{_suf}", f"walk2{_suf}", f"walk3{_suf}", f"walk2{_suf}"], [8, 8, 8, 8])
     ANIMS[f"run{_suf}"] = ([f"run1{_suf}", f"run2{_suf}"], [4, 4])
@@ -165,6 +182,9 @@ for _suf, _idle in (("_w", "idle_w"), ("_w2", "bready"), ("_w4", "sready")):
 # swing timing matches each weapon's attack in src/shared/weapons.ts (start, active, total)
 ANIMS["swing_w2"] = (["bwind", "bstrike", "bstrike"], [4, 4, 10])
 ANIMS["swing_w4"] = (["swind", "sstrike", "sstrike"], [3, 5, 8])
+ANIMS["swing_w3"] = (["stwind", "stsmash", "stsmash"], [8, 4, 16])
+ANIMS["swing_w5"] = (["rbash", "rbash", "rready"], [4, 3, 9])
+ANIMS["shoot_w5"] = (["rready", "rfire", "rready"], [2, 6, 2])
 LOOP_FROM = {"beam": 2}  # after the last frame, repeat from this frame index
 
 
@@ -509,6 +529,14 @@ def colorize(frame: np.ndarray, overrides) -> np.ndarray:
     return out
 
 
+def muzzle_of(frame: np.ndarray):
+    """Offset of the barrel tip from the feet anchor (rightmost pixel of the firing pose)."""
+    ys, xs = np.nonzero(frame >= 0)
+    xmax = int(xs.max())
+    rows = ys[xs == xmax]
+    return [int(xmax - AX + 1), int(round(float(rows.mean()))) - AY]
+
+
 def write_outputs(frames, preview):
     OUT.mkdir(parents=True, exist_ok=True)
     cols = 7
@@ -530,7 +558,8 @@ def write_outputs(frames, preview):
             sheet[r * CELL_H:(r + 1) * CELL_H, c * CELL_W:(c + 1) * CELL_W] = colorize(frames[name], overrides)
         Image.fromarray(sheet, "RGBA").save(OUT / f"{char}.png")
         sheets[char] = sheet
-        manifest[char] = {"image": f"gen/{char}.png", "w": CELL_W, "h": CELL_H, "ox": AX, "oy": AY, "anims": anims}
+        manifest[char] = {"image": f"gen/{char}.png", "w": CELL_W, "h": CELL_H, "ox": AX, "oy": AY, "anims": anims,
+                          "muzzle": muzzle_of(frames["rfire"])}
     (ROOT / "assets" / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print("wrote", OUT, "and assets/manifest.json")
     if preview:

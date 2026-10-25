@@ -89,6 +89,7 @@ export class Renderer {
     if (drawn === 0) this.sprites.draw(ctx, f.d, f.s, f.t, f.w);
     else if (drawn === 1 && f.w === WID.Stick && (f.s === St.Idle || f.s === St.Walk || f.s === St.Run || f.s === St.Jump)) drawHeldStick(ctx, f.s, f.t);
     if (!hasArt) drawWeaponInHand(ctx, f);
+    else if (f.s === St.Shoot && f.t >= 2 && f.t <= 5) drawMuzzleFlash(ctx, this.assets.muzzle(f.d));
     ctx.restore();
   }
 }
@@ -291,6 +292,13 @@ function drawBeam(ctx: CanvasRenderingContext2D, f: SnapFighter, cam: number, no
     ctx.fillRect(Math.round(x0 + off), Math.round(sy + ((i * 7) % 9) - 4), 5, 1);
   }
   orb(6 + Math.sin(now / 35));
+}
+
+function drawMuzzleFlash(ctx: CanvasRenderingContext2D, muzzle: [number, number]) {
+  ctx.fillStyle = '#fff2a0';
+  ctx.fillRect(muzzle[0], muzzle[1] - 3, 6, 7);
+  ctx.fillStyle = '#ff9a30';
+  ctx.fillRect(muzzle[0] + 3, muzzle[1] - 1, 6, 3);
 }
 
 function drawHeldStick(ctx: CanvasRenderingContext2D, st: number, t: number) {

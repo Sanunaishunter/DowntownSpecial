@@ -55,4 +55,4 @@ export const WEAPONS: Record<number, WeaponDef> = {
   },
 };
 
-export const BULLET = { speed: 7, life: 40, dmg: 7, kbx: 0.8 };
+export const BULLET = { speed: 7, life: 40, dmg: 7, kbx: 0.8, muzzleX: 22, muzzleZ: 20 };

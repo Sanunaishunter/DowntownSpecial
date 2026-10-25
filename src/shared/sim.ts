@@ -832,7 +832,7 @@ function tickVolley(w: World, f: Fighter) {
 }
 
 function fireBullet(w: World, f: Fighter) {
-  w.shots.push({ id: w.nextId++, kind: 0, x: f.x + f.face * 16, y: f.y, z: f.z + 16, vx: f.face * BULLET.speed, owner: f.slot + 1, life: BULLET.life });
+  w.shots.push({ id: w.nextId++, kind: 0, x: f.x + f.face * BULLET.muzzleX, y: f.y, z: f.z + BULLET.muzzleZ, vx: f.face * BULLET.speed, owner: f.slot + 1, life: BULLET.life });
   f.wn--;
 }
 
