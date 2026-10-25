@@ -7,3 +7,5 @@ assets/*
 !assets/manifest.json
 !assets/gen/
 !assets/gen/*.png
+__pycache__/
+*.pyc
