@@ -83,11 +83,12 @@ export class Renderer {
     ctx.save();
     ctx.translate(ox, oy - Math.round(f.z));
     ctx.scale(f.r, 1);
-    const art = artFor(f);
+    const hasArt = f.w > 1 && this.assets.hasArmed(f.d, f.w);
+    const art = artFor(f, hasArt);
     const drawn = this.assets.draw(ctx, f.d, f.s, art.t, art.weapon, art.anim);
     if (drawn === 0) this.sprites.draw(ctx, f.d, f.s, f.t, f.w);
     else if (drawn === 1 && f.w === WID.Stick && (f.s === St.Idle || f.s === St.Walk || f.s === St.Run || f.s === St.Jump)) drawHeldStick(ctx, f.s, f.t);
-    drawWeaponInHand(ctx, f);
+    if (!hasArt) drawWeaponInHand(ctx, f);
     ctx.restore();
   }
 }
@@ -102,11 +103,11 @@ function shadow(ctx: CanvasRenderingContext2D, x: number, y: number, z: number, 
 
 // Which sheet animation to use for a fighter. The stick has its own armed poses baked in;
 // other weapons reuse unarmed poses and are drawn on top.
-function artFor(f: SnapFighter): { weapon: number; anim?: string; t: number } {
+function artFor(f: SnapFighter, hasArt: boolean): { weapon: number; anim?: string; t: number } {
   if (f.s === St.Beam) return { weapon: 0, anim: f.t >= BEAM.charge + BEAM.fire ? 'beamend' : 'beam', t: f.t };
   if ((f.s === St.Idle || f.s === St.Walk || f.s === St.Run) && f.c > 0) return { weapon: 0, anim: 'cast', t: 0 };
   if (!f.w) return { weapon: 0, t: f.t };
-  if (f.w === WID.Stick) return { weapon: 1, t: f.t };
+  if (f.w === WID.Stick || hasArt) return { weapon: f.w, t: f.t };
   switch (f.s) {
     case St.Swing:
     case St.Shoot:

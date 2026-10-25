@@ -48,48 +48,6 @@
           60
         ]
       },
-      "idle_w": {
-        "frames": [
-          19
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "walk_w": {
-        "frames": [
-          36,
-          37,
-          38,
-          37
-        ],
-        "ticks": [
-          8,
-          8,
-          8,
-          8
-        ],
-        "loop": true
-      },
-      "run_w": {
-        "frames": [
-          39,
-          40
-        ],
-        "ticks": [
-          4,
-          4
-        ],
-        "loop": true
-      },
-      "jump_w": {
-        "frames": [
-          41
-        ],
-        "ticks": [
-          60
-        ]
-      },
       "punch": {
         "frames": [
           7,
@@ -298,6 +256,156 @@
           2,
           6,
           2
+        ]
+      },
+      "idle_w": {
+        "frames": [
+          19
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w": {
+        "frames": [
+          42,
+          43,
+          44,
+          43
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w": {
+        "frames": [
+          45,
+          46
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w": {
+        "frames": [
+          47
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "idle_w2": {
+        "frames": [
+          36
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w2": {
+        "frames": [
+          48,
+          49,
+          50,
+          49
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w2": {
+        "frames": [
+          51,
+          52
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w2": {
+        "frames": [
+          53
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "idle_w4": {
+        "frames": [
+          39
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w4": {
+        "frames": [
+          54,
+          55,
+          56,
+          55
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w4": {
+        "frames": [
+          57,
+          58
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w4": {
+        "frames": [
+          59
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "swing_w2": {
+        "frames": [
+          37,
+          38,
+          38
+        ],
+        "ticks": [
+          4,
+          4,
+          10
+        ]
+      },
+      "swing_w4": {
+        "frames": [
+          40,
+          41,
+          41
+        ],
+        "ticks": [
+          3,
+          5,
+          8
         ]
       }
     }
@@ -351,48 +459,6 @@
           60
         ]
       },
-      "idle_w": {
-        "frames": [
-          19
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "walk_w": {
-        "frames": [
-          36,
-          37,
-          38,
-          37
-        ],
-        "ticks": [
-          8,
-          8,
-          8,
-          8
-        ],
-        "loop": true
-      },
-      "run_w": {
-        "frames": [
-          39,
-          40
-        ],
-        "ticks": [
-          4,
-          4
-        ],
-        "loop": true
-      },
-      "jump_w": {
-        "frames": [
-          41
-        ],
-        "ticks": [
-          60
-        ]
-      },
       "punch": {
         "frames": [
           7,
@@ -601,6 +667,156 @@
           2,
           6,
           2
+        ]
+      },
+      "idle_w": {
+        "frames": [
+          19
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w": {
+        "frames": [
+          42,
+          43,
+          44,
+          43
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w": {
+        "frames": [
+          45,
+          46
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w": {
+        "frames": [
+          47
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "idle_w2": {
+        "frames": [
+          36
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w2": {
+        "frames": [
+          48,
+          49,
+          50,
+          49
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w2": {
+        "frames": [
+          51,
+          52
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w2": {
+        "frames": [
+          53
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "idle_w4": {
+        "frames": [
+          39
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w4": {
+        "frames": [
+          54,
+          55,
+          56,
+          55
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w4": {
+        "frames": [
+          57,
+          58
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w4": {
+        "frames": [
+          59
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "swing_w2": {
+        "frames": [
+          37,
+          38,
+          38
+        ],
+        "ticks": [
+          4,
+          4,
+          10
+        ]
+      },
+      "swing_w4": {
+        "frames": [
+          40,
+          41,
+          41
+        ],
+        "ticks": [
+          3,
+          5,
+          8
         ]
       }
     }
@@ -654,48 +870,6 @@
           60
         ]
       },
-      "idle_w": {
-        "frames": [
-          19
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "walk_w": {
-        "frames": [
-          36,
-          37,
-          38,
-          37
-        ],
-        "ticks": [
-          8,
-          8,
-          8,
-          8
-        ],
-        "loop": true
-      },
-      "run_w": {
-        "frames": [
-          39,
-          40
-        ],
-        "ticks": [
-          4,
-          4
-        ],
-        "loop": true
-      },
-      "jump_w": {
-        "frames": [
-          41
-        ],
-        "ticks": [
-          60
-        ]
-      },
       "punch": {
         "frames": [
           7,
@@ -904,6 +1078,156 @@
           2,
           6,
           2
+        ]
+      },
+      "idle_w": {
+        "frames": [
+          19
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w": {
+        "frames": [
+          42,
+          43,
+          44,
+          43
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w": {
+        "frames": [
+          45,
+          46
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w": {
+        "frames": [
+          47
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "idle_w2": {
+        "frames": [
+          36
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w2": {
+        "frames": [
+          48,
+          49,
+          50,
+          49
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w2": {
+        "frames": [
+          51,
+          52
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w2": {
+        "frames": [
+          53
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "idle_w4": {
+        "frames": [
+          39
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w4": {
+        "frames": [
+          54,
+          55,
+          56,
+          55
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w4": {
+        "frames": [
+          57,
+          58
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w4": {
+        "frames": [
+          59
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "swing_w2": {
+        "frames": [
+          37,
+          38,
+          38
+        ],
+        "ticks": [
+          4,
+          4,
+          10
+        ]
+      },
+      "swing_w4": {
+        "frames": [
+          40,
+          41,
+          41
+        ],
+        "ticks": [
+          3,
+          5,
+          8
         ]
       }
     }
@@ -957,48 +1281,6 @@
           60
         ]
       },
-      "idle_w": {
-        "frames": [
-          19
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "walk_w": {
-        "frames": [
-          36,
-          37,
-          38,
-          37
-        ],
-        "ticks": [
-          8,
-          8,
-          8,
-          8
-        ],
-        "loop": true
-      },
-      "run_w": {
-        "frames": [
-          39,
-          40
-        ],
-        "ticks": [
-          4,
-          4
-        ],
-        "loop": true
-      },
-      "jump_w": {
-        "frames": [
-          41
-        ],
-        "ticks": [
-          60
-        ]
-      },
       "punch": {
         "frames": [
           7,
@@ -1207,6 +1489,156 @@
           2,
           6,
           2
+        ]
+      },
+      "idle_w": {
+        "frames": [
+          19
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w": {
+        "frames": [
+          42,
+          43,
+          44,
+          43
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w": {
+        "frames": [
+          45,
+          46
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w": {
+        "frames": [
+          47
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "idle_w2": {
+        "frames": [
+          36
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w2": {
+        "frames": [
+          48,
+          49,
+          50,
+          49
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w2": {
+        "frames": [
+          51,
+          52
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w2": {
+        "frames": [
+          53
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "idle_w4": {
+        "frames": [
+          39
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w4": {
+        "frames": [
+          54,
+          55,
+          56,
+          55
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w4": {
+        "frames": [
+          57,
+          58
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w4": {
+        "frames": [
+          59
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "swing_w2": {
+        "frames": [
+          37,
+          38,
+          38
+        ],
+        "ticks": [
+          4,
+          4,
+          10
+        ]
+      },
+      "swing_w4": {
+        "frames": [
+          40,
+          41,
+          41
+        ],
+        "ticks": [
+          3,
+          5,
+          8
         ]
       }
     }

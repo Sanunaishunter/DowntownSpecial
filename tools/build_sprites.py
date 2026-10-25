@@ -36,6 +36,9 @@ FEET_BAND = 0.12
 #   flip       poses to mirror horizontally
 #   skip       poses that are cut but not used
 #   gain       brightness multiplier for a sheet that came out darker than the rest
+#   auto_gain  measure the skin tone and brighten/darken the sheet to match the others
+#   split      'components' cuts poses by connected shapes instead of empty gaps
+#   grow       how far (in 4px steps) components are expanded before grouping; 0 = exact shapes
 SHEETS = [
     dict(file="ronin-idle.jpg", grid=(1, 1), names=["idle"], ref="idle"),
     dict(file="sheet-move.jpg", grid=(3, 2), names=["walk1", "walk2", "walk3", "run1", "run2", "jump"], ref="walk2"),
@@ -48,6 +51,8 @@ SHEETS = [
          scale_from="sheet-weapon.png", main_only=True),
     dict(file="sheet-special.jpg", grid=(3, 2), names=["charge1", "charge2", "fire1", "fire2", "recover", "cast"],
          ref="recover", main_only=True, gain=1.12),
+    dict(file="sheet-blades.jpg", grid=(3, 2), names=["bready", "bwind", "bstrike", "sready", "sstrike", "swind"],
+         scale_from="sheet-special.jpg", main_only=True, split="components", grow=0, auto_gain=True),
 ]
 
 # palette: name -> base colour; fringe entries collapse into the outline
@@ -66,6 +71,10 @@ PALETTE = [
     ("wood", (138, 95, 55)),
     ("wood_dark", (98, 65, 36)),
     ("red", (205, 30, 40)),
+    ("bamboo", (228, 205, 125)),
+    ("bamboo_dark", (168, 138, 72)),
+    ("blade", (77, 230, 255)),
+    ("blade_dark", (30, 160, 210)),
     ("fringe1", (111, 45, 91)),
     ("fringe2", (48, 20, 39)),
     ("fringe3", (27, 3, 10)),
@@ -73,6 +82,14 @@ PALETTE = [
     ("fringe5", (78, 2, 82)),
     ("fringe6", (46, 46, 51)),
 ]
+# Weapon colours are only matched inside the poses that actually hold that weapon, so
+# similar-looking skin tones never turn into bamboo yellow.
+ENTRY_SCOPE = {
+    "bamboo": ["bready", "bwind", "bstrike"],
+    "bamboo_dark": ["bready", "bwind", "bstrike"],
+    "blade": ["sready", "swind", "sstrike"],
+    "blade_dark": ["sready", "swind", "sstrike"],
+}
 CANON = {k: "outline" for k in ("fringe1", "fringe2", "fringe3", "fringe4", "fringe5", "fringe6")}
 NAMES = [n for n, _ in PALETTE]
 PAL = np.array([c for _, c in PALETTE], dtype=np.int32)
@@ -101,11 +118,14 @@ BASE_FRAMES = [
     "idle_w", "swing1", "swing2", "swing3", "pick",
     "grab", "lift", "carry1", "carry2", "windswing", "smash",
     "charge1", "charge2", "fire1", "fire2", "recover", "cast",
+    "bready", "bwind", "bstrike", "sready", "swind", "sstrike",
 ]
-# lower body from these frames is grafted under the upper body of idle_w (armed stance)
-ARMED = {"walk1_w": "walk1", "walk2_w": "walk2", "walk3_w": "walk3",
-         "run1_w": "run1", "run2_w": "run2", "jump_w": "jump"}
-FRAME_ORDER = BASE_FRAMES + list(ARMED)
+# Armed stances per weapon suffix: the upper body of the "ready" frame is grafted onto
+# the legs of each locomotion frame. _w = stick, _w2 = bamboo sword, _w4 = energy sword.
+ARMED_BASES = ["walk1", "walk2", "walk3", "run1", "run2", "jump"]
+ARMED_SETS = {"_w": "idle_w", "_w2": "bready", "_w4": "sready"}
+ARMED = [f"{b}{suf}" for suf in ARMED_SETS for b in ARMED_BASES]
+FRAME_ORDER = BASE_FRAMES + ARMED
 
 # anim name -> frames (by pose name) and per-frame duration in game ticks
 ANIMS = {
@@ -113,10 +133,6 @@ ANIMS = {
     "walk": (["walk1", "walk2", "walk3", "walk2"], [8, 8, 8, 8]),
     "run": (["run1", "run2"], [4, 4]),
     "jump": (["jump"], [60]),
-    "idle_w": (["idle_w"], [60]),
-    "walk_w": (["walk1_w", "walk2_w", "walk3_w", "walk2_w"], [8, 8, 8, 8]),
-    "run_w": (["run1_w", "run2_w"], [4, 4]),
-    "jump_w": (["jump_w"], [60]),
     "punch": (["windup", "punch", "punch", "windup"], [2, 4, 3, 3]),
     "kick": (["windup", "kick", "kick", "windup"], [5, 5, 5, 5]),
     "airkick": (["flykick"], [60]),
@@ -139,7 +155,16 @@ ANIMS = {
     "cast": (["cast"], [60]),
     "shoot": (["windup", "punch", "windup"], [2, 6, 2]),
 }
-LOOPING = {"walk", "run", "walk_w", "run_w", "hold"}
+LOOPING = {"walk", "run", "hold"}
+for _suf, _idle in (("_w", "idle_w"), ("_w2", "bready"), ("_w4", "sready")):
+    ANIMS[f"idle{_suf}"] = ([_idle], [60])
+    ANIMS[f"walk{_suf}"] = ([f"walk1{_suf}", f"walk2{_suf}", f"walk3{_suf}", f"walk2{_suf}"], [8, 8, 8, 8])
+    ANIMS[f"run{_suf}"] = ([f"run1{_suf}", f"run2{_suf}"], [4, 4])
+    ANIMS[f"jump{_suf}"] = ([f"jump{_suf}"], [60])
+    LOOPING |= {f"walk{_suf}", f"run{_suf}"}
+# swing timing matches each weapon's attack in src/shared/weapons.ts (start, active, total)
+ANIMS["swing_w2"] = (["bwind", "bstrike", "bstrike"], [4, 4, 10])
+ANIMS["swing_w4"] = (["swind", "sstrike", "sstrike"], [3, 5, 8])
 LOOP_FROM = {"beam": 2}  # after the last frame, repeat from this frame index
 
 
@@ -232,12 +257,59 @@ def split_poses(mask: np.ndarray, grid, names):
     return cell_masks
 
 
-def nearest_palette(rgb: np.ndarray) -> np.ndarray:
+def split_components(mask: np.ndarray, grid, names, grow: int = 1):
+    """Cut poses by connected shapes (for sheets whose poses overlap in x or y)."""
+    mask = drop_specks(mask)
+    q = 4
+    H, W = mask.shape
+    sh, sw = H // q, W // q
+    small = mask[: sh * q, : sw * q].reshape(sh, q, sw, q).any(axis=(1, 3))
+    grown = small.copy()
+    for _ in range(grow):
+        g = grown.copy()
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                g |= np.roll(np.roll(grown, dy, 0), dx, 1)
+        grown = g
+    lab, n = label(grown)
+    full = np.zeros(mask.shape, np.int32)
+    up = np.kron(lab, np.ones((q, q), dtype=np.int32))
+    full[: up.shape[0], : up.shape[1]] = up
+    cols, rows = grid
+    cells = {name: np.zeros_like(mask) for name in names}
+    for k in range(1, n + 1):
+        ys, xs = np.nonzero(lab == k)
+        if len(ys) < 12:
+            continue
+        col = min(cols - 1, int(xs.mean() * q / (W / cols)))
+        row = min(rows - 1, int(ys.mean() * q / (H / rows)))
+        idx = row * cols + col
+        if idx < len(names):
+            cells[names[idx]] |= mask & (full == k)
+    return cells
+
+
+SKIN_TARGET = np.array([250, 191, 132])
+
+
+def auto_gain(im: np.ndarray) -> np.ndarray:
+    r, g, b = im[..., 0], im[..., 1], im[..., 2]
+    skin = (r > 150) & (r - b > 60) & (g > 90) & (r > g) & (g > b) & (r - g > 25) & (r - g < 90)
+    sel = im[skin]
+    top = sel[sel.sum(1) >= np.percentile(sel.sum(1), 50)]
+    gain = float(np.clip((SKIN_TARGET / np.median(top, 0)).mean(), 0.85, 1.25))
+    print(f"  auto gain {gain:.2f}")
+    return np.clip(im * gain, 0, 255).astype(np.int32)
+
+
+def nearest_palette(rgb: np.ndarray, pose=None) -> np.ndarray:
+    allowed = np.array([i for i, n in enumerate(NAMES) if n not in ENTRY_SCOPE or pose in ENTRY_SCOPE[n]])
+    pal = PAL[allowed]
     out = np.zeros(rgb.shape[:2], np.int32)
     for y0 in range(0, rgb.shape[0], 64):
         blk = rgb[y0:y0 + 64].astype(np.int32)
-        d = ((blk[:, :, None, :] - PAL[None, None]) ** 2).sum(-1)
-        out[y0:y0 + 64] = d.argmin(-1)
+        d = ((blk[:, :, None, :] - pal[None, None]) ** 2).sum(-1)
+        out[y0:y0 + 64] = allowed[d.argmin(-1)]
     return CANON_IDX[out]
 
 
@@ -294,7 +366,7 @@ def erase_rock(rgb: np.ndarray, mask: np.ndarray) -> np.ndarray:
     return out
 
 
-def shrink(rgb, mask, scale, flip=False):
+def shrink(rgb, mask, scale, flip=False, pose=None):
     """Return CELL_H x CELL_W index frame (-1 = transparent)."""
     ys, xs = np.nonzero(mask)
     x0, x1, y0, y1 = xs.min(), xs.max() + 1, ys.min(), ys.max() + 1
@@ -307,7 +379,7 @@ def shrink(rgb, mask, scale, flip=False):
     bottom = ys.max() + 1
     band = ys >= bottom - max(4, int((bottom - ys.min()) * FEET_BAND))
     ax = (xs[band].min() + xs[band].max() + 1) / 2
-    idx = nearest_palette(sub_rgb)
+    idx = nearest_palette(sub_rgb, pose)
     frame = np.full((CELL_H, CELL_W), -1, np.int32)
     for ty in range(CELL_H):
         sy0 = bottom + (ty - AY) * scale
@@ -327,6 +399,24 @@ def shrink(rgb, mask, scale, flip=False):
             counts = np.bincount(idx[a:b, c:d][mb], minlength=len(NAMES))
             frame[ty, tx] = 0 if counts[0] / counts.sum() >= OUTLINE_SHARE else int(counts.argmax())
     return frame
+
+
+def extend_blade(frame: np.ndarray, names=("bamboo", "bamboo_dark"), add: int = 11) -> np.ndarray:
+    """Lengthen a blade that the source image cut off at its edge."""
+    idxs = {NAMES.index(n) for n in names}
+    _, xs = np.nonzero(frame >= 0)
+    xmax = int(xs.max())
+    out = frame.copy()
+    for y in range(frame.shape[0]):
+        hits = [x for x in range(max(0, xmax - 4), xmax + 1) if frame[y, x] in idxs]
+        if hits:
+            colr = frame[y, max(hits)]
+            for x in range(max(hits) + 1, min(CELL_W - 1, max(hits) + 1 + add)):
+                out[y, x] = colr
+    return out
+
+
+FIXUPS = {"bstrike": extend_blade}
 
 
 def tidy(frame: np.ndarray) -> np.ndarray:
@@ -371,7 +461,12 @@ def build_frames():
         im = np.asarray(Image.open(SRC / fname).convert("RGB")).astype(np.int32)
         if sh.get("gain"):
             im = np.clip(im * sh["gain"], 0, 255).astype(np.int32)
-        poses = split_poses(key_background(im), sh["grid"], names)
+        if sh.get("auto_gain"):
+            im = auto_gain(im)
+        if sh.get("split") == "components":
+            poses = split_components(key_background(im), sh["grid"], names, sh.get("grow", 1))
+        else:
+            poses = split_poses(key_background(im), sh["grid"], names)
         missing = [n for n in names if not poses[n].any()]
         if missing:
             sys.exit(f"{fname}: could not find poses {missing}")
@@ -390,12 +485,16 @@ def build_frames():
                 m = erase_rock(im, m)
             if sh.get("main_only"):
                 m = keep_main(m)
-            frames[name] = auto_outline(drop_small(tidy(shrink(im, m, scales[fname], name in sh.get("flip", [])))))
+            frame = shrink(im, m, scales[fname], name in sh.get("flip", []), name)
+            if name in FIXUPS:
+                frame = FIXUPS[name](frame)
+            frames[name] = auto_outline(drop_small(tidy(frame)))
     split = int(np.nonzero((frames["idle_w"] == sash).any(axis=1))[0].max()) + 1
-    for armed, base in ARMED.items():
-        out = frames[base].copy()
-        out[:split] = frames["idle_w"][:split]
-        frames[armed] = auto_outline(out)
+    for suf, upper in ARMED_SETS.items():
+        for base in ARMED_BASES:
+            out = frames[base].copy()
+            out[:split] = frames[upper][:split]
+            frames[f"{base}{suf}"] = auto_outline(out)
     return frames
 
 

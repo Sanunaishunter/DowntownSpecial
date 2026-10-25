@@ -75,11 +75,17 @@ export class Assets {
     return this.sheets.has(def);
   }
 
+  hasArmed(def: string, weapon: number) {
+    const suffix = weapon === 1 ? '_w' : `_w${weapon}`;
+    return !!this.sheets.get(def)?.def.anims[`idle${suffix}`];
+  }
+
   draw(ctx: CanvasRenderingContext2D, def: string, st: number, t: number, weapon = 0, animName?: string): 0 | 1 | 2 {
     const s = this.sheets.get(def);
     if (!s) return 0;
     const name = animName ?? ST_NAMES[st] ?? 'idle';
-    const armed = weapon ? s.def.anims[`${name}_w`] : undefined;
+    const suffix = weapon === 1 ? '_w' : weapon > 1 ? `_w${weapon}` : '';
+    const armed = suffix ? s.def.anims[`${name}${suffix}`] : undefined;
     const anim = armed ?? s.def.anims[name] ?? s.def.anims.idle;
     if (!anim) return 0;
     const idx = pickFrame(anim, t, s.def.fps ?? 8);
