@@ -570,6 +570,7 @@ NINJA_ANIMS = {
     "punch": (["n_wind", "n_punch", "n_punch", "n_wind"], [2, 4, 3, 3]),
     "kick": (["n_wind", "n_kick", "n_wind"], [5, 10, 5]),
     "airkick": (["n_kick2"], [60]),
+    "shoot": (["n_wind", "n_punch", "n_wind"], [3, 5, 3]),
     "hurt": (["n_hurt"], [60]),
     "fly": (["n_fly"], [60]),
     "down": (["n_lying"], [60]),

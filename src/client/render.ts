@@ -1,4 +1,4 @@
-import { SCREEN_H, SCREEN_W } from '../shared/constants';
+import { SCREEN_H, SCREEN_W, STAGE_W } from '../shared/constants';
 import { DEFS } from '../shared/defs';
 import { BEAM, HALO, MP_MAX, SPECIALS } from '../shared/specials';
 import { St, type GameEvent, type SnapFighter, type SnapItem, type Snapshot } from '../shared/types';
@@ -59,6 +59,7 @@ export class Renderer {
     ctx.imageSmoothingEnabled = false;
     const cam = snap ? snap.c : 0;
     if (!this.assets.drawBackdrop(ctx, cam, SCREEN_W)) drawBackground(ctx, cam);
+    tintForTime(ctx, cam);
     if (!snap) return;
 
     for (const it of snap.it) drawItem(ctx, it, cam);
@@ -390,6 +391,32 @@ function drawItem(ctx: CanvasRenderingContext2D, it: SnapItem, cam: number) {
 function drawShot(ctx: CanvasRenderingContext2D, s: { k: number; x: number; y: number; z: number; r: 1 | -1 }, cam: number, now: number) {
   const sx = Math.round(s.x - cam);
   const sy = Math.round(s.y - s.z);
+  if (s.k === 2) {
+    const cross = Math.floor(now / 45) % 2 === 0;
+    ctx.fillStyle = '#10101a';
+    if (cross) {
+      ctx.fillRect(sx - 3, sy - 1, 7, 3);
+      ctx.fillRect(sx - 1, sy - 3, 3, 7);
+    } else {
+      for (let i = -3; i <= 3; i++) {
+        ctx.fillRect(sx + i - 1, sy + i - 1, 3, 3);
+        ctx.fillRect(sx + i - 1, sy - i - 1, 3, 3);
+      }
+    }
+    ctx.fillStyle = '#dfe4ee';
+    if (cross) {
+      ctx.fillRect(sx - 2, sy, 5, 1);
+      ctx.fillRect(sx, sy - 2, 1, 5);
+    } else {
+      for (let i = -2; i <= 2; i++) {
+        ctx.fillRect(sx + i, sy + i, 1, 1);
+        ctx.fillRect(sx + i, sy - i, 1, 1);
+      }
+    }
+    ctx.fillStyle = 'rgba(223,228,238,0.35)';
+    ctx.fillRect(s.r > 0 ? sx - 10 : sx + 5, sy, 6, 1);
+    return;
+  }
   if (s.k === 1) {
     for (let i = 1; i <= 4; i++) {
       ctx.fillStyle = `rgba(255,160,50,${0.32 - i * 0.06})`;
@@ -493,6 +520,31 @@ function drawSpark(ctx: CanvasRenderingContext2D, e: Fx, cam: number, k: number)
     ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len);
   }
   ctx.stroke();
+}
+
+// The stage runs from midday to dusk: the background is multiplied with a colour that follows the camera.
+const TIME_OF_DAY: [number, number[]][] = [
+  [0, [255, 255, 255]],
+  [0.4, [255, 248, 232]],
+  [0.65, [255, 214, 170]],
+  [0.85, [236, 150, 140]],
+  [1, [150, 118, 190]],
+];
+
+function tintForTime(ctx: CanvasRenderingContext2D, cam: number) {
+  const t = Math.max(0, Math.min(1, cam / (STAGE_W - SCREEN_W)));
+  let i = 1;
+  while (i < TIME_OF_DAY.length - 1 && t > TIME_OF_DAY[i][0]) i++;
+  const [t0, c0] = TIME_OF_DAY[i - 1];
+  const [t1, c1] = TIME_OF_DAY[i];
+  const k = (t - t0) / (t1 - t0);
+  const c = c0.map((v, n) => Math.round(v + (c1[n] - v) * k));
+  if (c[0] === 255 && c[1] === 255 && c[2] === 255) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'multiply';
+  ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+  ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+  ctx.restore();
 }
 
 function drawBackground(ctx: CanvasRenderingContext2D, cam: number) {

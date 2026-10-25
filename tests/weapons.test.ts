@@ -503,3 +503,40 @@ describe('光環 / 爆氣 / 聖盾 / 主角威能', () => {
     expect(f.k & (1 << SP.Aura)).toBeTruthy();
   });
 });
+
+describe('ninja throwing stars', () => {
+  it('a ninja at range throws a star that hurts the hero', () => {
+    let hurt = 0;
+    for (let seed = 1; seed <= 20; seed++) {
+      const w = setup(seed);
+      const p = player(w);
+      p.inv = 0;
+      p.face = 1;
+      const n = foe(w, 100, 0, 'ninja', 'grunt', 100);
+      n.aiT = 0;
+      n.cd = 0;
+      let sawStar = false;
+      for (let i = 0; i < 400 && !sawStar; i++) {
+        run(w, 1);
+        sawStar = w.shots.some((s) => s.kind === 2);
+        if (!sawStar && Math.abs(n.x - p.x) < 40) break;
+      }
+      if (!sawStar) continue;
+      const hp0 = p.hp;
+      run(w, 90);
+      if (p.hp < hp0) hurt++;
+    }
+    expect(hurt).toBeGreaterThan(5);
+  });
+
+  it('a star ignores other enemies', () => {
+    const w = setup();
+    const p = player(w);
+    p.inv = 0;
+    const other = foe(w, 80, 0, 'saburo', 'grunt', 50);
+    w.shots.push({ id: w.nextId++, kind: 2, x: p.x - 40, y: p.y, z: 20, vx: 3.2, owner: 0, life: 90 });
+    w.shots.push({ id: w.nextId++, kind: 2, x: other.x - 20, y: other.y, z: 20, vx: 3.2, owner: 0, life: 90 });
+    run(w, 5);
+    expect(other.hp).toBe(50);
+  });
+});

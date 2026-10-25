@@ -3,7 +3,7 @@ import { DEFS, PLAYER_DEFS } from './defs';
 import { AURA, BEAM, HALO, MP_MAX, MP_PER_HIT, MP_PER_KNOCKDOWN, SHIELD, SP, SPECIALS, VOLLEY } from './specials';
 import { STAGE, type WaveDef } from './stage';
 import { St, type Fighter, type PlayerInput, type Snapshot, type World } from './types';
-import { BULLET, UNLIMITED, WEAPONS, type AtkDef } from './weapons';
+import { BULLET, SHURIKEN, UNLIMITED, WEAPONS, type AtkDef } from './weapons';
 
 const PEND_WINDOW = 3;
 const UPPER_WINDOW = 12;
@@ -507,6 +507,11 @@ function updateEnemy(w: World, e: Fighter) {
       } else if (e.kind === 'boss' && adx > 80 && ady < 10 && e.cd <= 0 && rand(w) < 0.02) {
         setSt(e, St.Dash);
         e.cd = 90;
+      } else if (d.ranged && adx > 56 && adx < 150 && ady < 9 && e.cd <= 0 && rand(w) < 0.03) {
+        setSt(e, St.Shoot);
+        e.vx = 0;
+        e.vy = 0;
+        e.cd = 140 + Math.floor(rand(w) * 60);
       } else {
         const wx = tgt.x - e.face * stand;
         const mx = wx - e.x;
@@ -574,9 +579,11 @@ function updateBody(w: World, f: Fighter) {
     case St.Shoot:
       f.vx = 0;
       f.vy = 0;
-      if (f.t === 2) fireBullet(w, f);
+      if (DEFS[f.def].ranged) {
+        if (f.t === 3) throwShuriken(w, f);
+      } else if (f.t === 2) fireBullet(w, f);
       if (f.t >= 10) {
-        if (f.wn <= 0) breakWeapon(w, f);
+        if (f.wn <= 0 && !DEFS[f.def].ranged) breakWeapon(w, f);
         setSt(f, St.Idle);
       }
       break;
@@ -944,6 +951,10 @@ function tickVolley(w: World, f: Fighter) {
   f.cast = 8;
 }
 
+function throwShuriken(w: World, f: Fighter) {
+  w.shots.push({ id: w.nextId++, kind: 2, x: f.x + f.face * 12, y: f.y, z: f.z + SHURIKEN.z, vx: f.face * SHURIKEN.speed, owner: 0, life: SHURIKEN.life });
+}
+
 function fireBullet(w: World, f: Fighter) {
   w.shots.push({ id: w.nextId++, kind: 0, x: f.x + f.face * BULLET.muzzleX, y: f.y, z: f.z + BULLET.muzzleZ, vx: f.face * BULLET.speed, owner: f.slot + 1, life: BULLET.life });
   f.wn--;
@@ -954,6 +965,17 @@ function updateShots(w: World) {
     s.x += s.vx;
     if (--s.life <= 0 || s.x < w.cam - 20 || s.x > w.cam + SCREEN_W + 20) {
       s.life = 0;
+      continue;
+    }
+    if (s.owner === 0) {
+      // an enemy throwing star hits players only
+      for (const t of w.fighters) {
+        if (!isPlayer(t) || !vulnerable(t)) continue;
+        if (Math.abs(t.x - s.x) > 8 || Math.abs(t.y - s.y) > 7 || Math.abs(t.z + 14 - s.z) > 16) continue;
+        hit(w, t, -1, SHURIKEN.dmg, SHURIKEN.kbx, false, 0, s.vx >= 0 ? 1 : -1, false);
+        s.life = 0;
+        break;
+      }
       continue;
     }
     for (const t of w.fighters) {

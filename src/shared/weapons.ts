@@ -25,6 +25,9 @@ export interface WeaponDef {
   bossWeight: number;
 }
 
+/** The ninja's throwing star (shot kind 2, owner 0 = an enemy shot). */
+export const SHURIKEN = { speed: 3.2, life: 90, dmg: 6, kbx: 0.6, z: 20 };
+
 export const UNLIMITED = 999;
 
 export const WEAPONS: Record<number, WeaponDef> = {
