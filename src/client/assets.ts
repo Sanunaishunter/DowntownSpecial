@@ -70,18 +70,19 @@ export class Assets {
     return this.sheets.has(def);
   }
 
-  draw(ctx: CanvasRenderingContext2D, def: string, st: number, t: number): boolean {
+  draw(ctx: CanvasRenderingContext2D, def: string, st: number, t: number, weapon = 0): 0 | 1 | 2 {
     const s = this.sheets.get(def);
-    if (!s) return false;
+    if (!s) return 0;
     const name = ST_NAMES[st] ?? 'idle';
-    const anim = s.def.anims[name] ?? s.def.anims.idle;
-    if (!anim) return false;
+    const armed = weapon ? s.def.anims[`${name}_w`] : undefined;
+    const anim = armed ?? s.def.anims[name] ?? s.def.anims.idle;
+    if (!anim) return 0;
     const idx = pickFrame(anim, t, s.def.fps ?? 8);
-    if (idx === undefined) return false;
+    if (idx === undefined) return 0;
     const sx = (idx % s.cols) * s.def.w;
     const sy = Math.floor(idx / s.cols) * s.def.h;
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(s.img, sx, sy, s.def.w, s.def.h, -s.def.ox, -s.def.oy, s.def.w, s.def.h);
-    return true;
+    return armed ? 2 : 1;
   }
 }

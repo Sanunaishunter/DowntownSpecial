@@ -93,11 +93,9 @@ export class Renderer {
     ctx.save();
     ctx.translate(ox, oy - Math.round(f.z));
     ctx.scale(f.r, 1);
-    if (this.assets.draw(ctx, f.d, f.s, f.t)) {
-      if (f.w) drawHeldStick(ctx, f.s, f.t);
-    } else {
-      this.sprites.draw(ctx, f.d, f.s, f.t, f.w);
-    }
+    const drawn = this.assets.draw(ctx, f.d, f.s, f.t, f.w);
+    if (drawn === 0) this.sprites.draw(ctx, f.d, f.s, f.t, f.w);
+    else if (drawn === 1 && f.w && (f.s === St.Idle || f.s === St.Walk || f.s === St.Run || f.s === St.Jump)) drawHeldStick(ctx, f.s, f.t);
     ctx.restore();
   }
 }

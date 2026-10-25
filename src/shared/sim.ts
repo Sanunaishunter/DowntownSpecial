@@ -6,6 +6,7 @@ import { St, type Fighter, type PlayerInput, type Snapshot, type World } from '.
 const PEND_WINDOW = 3;
 const UPPER_WINDOW = 12;
 const AB = Btn.A | Btn.B;
+const HOLD_Z = 34;
 
 interface AtkDef {
   start: number;
@@ -396,7 +397,7 @@ function throwHeld(w: World, f: Fighter) {
   if (!e) return;
   e.heldBy = 0;
   setSt(e, St.Down);
-  e.z = f.z + 24;
+  e.z = f.z + HOLD_Z;
   e.vz = 1.0;
   e.vx = f.face * 3.4;
   e.vy = 0;
@@ -414,7 +415,7 @@ function dropHeld(w: World, holder: Fighter) {
   e.vx = 0;
   e.vy = 0;
   e.vz = 0.8;
-  e.z = holder.z + 24;
+  e.z = holder.z + HOLD_Z;
 }
 
 function placeHeld(w: World, e: Fighter) {
@@ -426,7 +427,7 @@ function placeHeld(w: World, e: Fighter) {
   }
   e.x = holder.x + holder.face * 4;
   e.y = holder.y + 0.5;
-  e.z = holder.z + (holder.st === St.Lift ? 24 * Math.min(1, holder.t / 14) : 24);
+  e.z = holder.z + (holder.st === St.Lift ? HOLD_Z * Math.min(1, holder.t / 14) : HOLD_Z);
   e.face = holder.face;
 }
 

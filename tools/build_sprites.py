@@ -28,31 +28,47 @@ OUTLINE_SHARE = 0.38
 MIN_FILL = 0.45
 FEET_BAND = 0.12
 
-# (file, grid cols x rows, pose names, pose used to normalise scale)
+# Each sheet: file, grid (cols, rows), pose names in reading order, and options.
+#   ref        pose whose height defines the scale (TARGET_H game pixels)
+#   scale_from reuse the scale measured on another sheet
+#   main_only  keep only the main figure (drops speed lines, flying objects)
+#   erase_rock poses where a gray boulder must be removed
+#   flip       poses to mirror horizontally
+#   skip       poses that are cut but not used
 SHEETS = [
-    ("ronin-idle.jpg", (1, 1), ["idle"], "idle"),
-    ("sheet-move.jpg", (3, 2), ["walk1", "walk2", "walk3", "run1", "run2", "jump"], "walk2"),
-    ("sheet-attack.jpg", (3, 2), ["windup", "punch", "kick", "flykick", "dash", "upper"], "windup"),
+    dict(file="ronin-idle.jpg", grid=(1, 1), names=["idle"], ref="idle"),
+    dict(file="sheet-move.jpg", grid=(3, 2), names=["walk1", "walk2", "walk3", "run1", "run2", "jump"], ref="walk2"),
+    dict(file="sheet-attack.jpg", grid=(3, 2), names=["windup", "punch", "kick", "flykick", "dash", "upper"], ref="windup"),
+    dict(file="sheet-weapon.png", grid=(3, 2), names=["idle_w", "swing1", "swing2", "swing3", "pick", "throwstick"],
+         ref="idle_w", main_only=True, skip=["throwstick"]),
+    dict(file="sheet-hurt.png", grid=(3, 2), names=["hurt", "lying", "getup", "hold", "throw", "stomp"],
+         scale_from="sheet-weapon.png", main_only=True, erase_rock=["hold"], flip=["lying"]),
 ]
 
-# palette: name -> (base colour, canonical index it collapses into)
+# palette: name -> base colour; fringe entries collapse into the outline
 PALETTE = [
     ("outline", (6, 4, 12)),
-    ("skin", (240, 180, 133)),
-    ("skin_shade", (186, 126, 89)),
-    ("cloth", (100, 107, 145)),
-    ("cloth_dark", (72, 77, 108)),
-    ("pants", (121, 94, 67)),
-    ("pants_dark", (74, 58, 49)),
+    ("skin", (245, 188, 135)),
+    ("skin_shade", (196, 128, 84)),
+    ("cloth", (101, 117, 158)),
+    ("cloth_dark", (71, 84, 121)),
+    ("pants", (120, 86, 55)),
+    ("pants_dark", (66, 58, 52)),
     ("sash", (165, 164, 160)),
     ("white", (251, 248, 242)),
-    ("sandal", (224, 182, 152)),
+    ("sandal", (224, 170, 110)),
     ("sandal_dark", (187, 145, 114)),
+    ("wood", (138, 95, 55)),
+    ("wood_dark", (98, 65, 36)),
+    ("red", (205, 30, 40)),
     ("fringe1", (111, 45, 91)),
     ("fringe2", (48, 20, 39)),
     ("fringe3", (27, 3, 10)),
+    ("fringe4", (146, 7, 149)),
+    ("fringe5", (78, 2, 82)),
+    ("fringe6", (46, 46, 51)),
 ]
-CANON = {"fringe1": "outline", "fringe2": "outline", "fringe3": "outline"}
+CANON = {k: "outline" for k in ("fringe1", "fringe2", "fringe3", "fringe4", "fringe5", "fringe6")}
 NAMES = [n for n, _ in PALETTE]
 PAL = np.array([c for _, c in PALETTE], dtype=np.int32)
 CANON_IDX = np.array([NAMES.index(CANON.get(n, n)) for n in NAMES])
@@ -61,7 +77,7 @@ RECOLOR = {
     "kunimasa": {},
     "rikigoro": {
         "cloth": (200, 72, 72), "cloth_dark": (142, 46, 56), "sash": (236, 208, 80),
-        "pants": (72, 72, 96), "pants_dark": (46, 46, 64),
+        "pants": (112, 74, 52), "pants_dark": (70, 46, 34),
     },
     "zako": {
         "cloth": (88, 168, 88), "cloth_dark": (52, 124, 60), "sash": (214, 180, 60),
@@ -73,10 +89,16 @@ RECOLOR = {
     },
 }
 
-FRAME_ORDER = [
+BASE_FRAMES = [
     "idle", "walk1", "walk2", "walk3", "run1", "run2", "jump",
-    "windup", "punch", "kick", "flykick", "dash", "upper", "lying",
+    "windup", "punch", "kick", "flykick", "dash", "upper",
+    "hurt", "lying", "getup", "hold", "throw", "stomp",
+    "idle_w", "swing1", "swing2", "swing3", "pick",
 ]
+# lower body from these frames is grafted under the upper body of idle_w (armed stance)
+ARMED = {"walk1_w": "walk1", "walk2_w": "walk2", "walk3_w": "walk3",
+         "run1_w": "run1", "run2_w": "run2", "jump_w": "jump"}
+FRAME_ORDER = BASE_FRAMES + list(ARMED)
 
 # anim name -> frames (by pose name) and per-frame duration in game ticks
 ANIMS = {
@@ -84,25 +106,29 @@ ANIMS = {
     "walk": (["walk1", "walk2", "walk3", "walk2"], [8, 8, 8, 8]),
     "run": (["run1", "run2"], [4, 4]),
     "jump": (["jump"], [60]),
+    "idle_w": (["idle_w"], [60]),
+    "walk_w": (["walk1_w", "walk2_w", "walk3_w", "walk2_w"], [8, 8, 8, 8]),
+    "run_w": (["run1_w", "run2_w"], [4, 4]),
+    "jump_w": (["jump_w"], [60]),
     "punch": (["windup", "punch", "punch", "windup"], [2, 4, 3, 3]),
     "kick": (["windup", "kick", "kick", "windup"], [5, 5, 5, 5]),
     "airkick": (["flykick"], [60]),
     "dash": (["dash"], [60]),
     "upper": (["upper"], [60]),
-    "hurt": (["idle"], [60]),
+    "hurt": (["hurt"], [60]),
     "down": (["lying"], [60]),
     "dead": (["lying"], [60]),
     "held": (["lying"], [60]),
-    "getup": (["idle"], [60]),
-    "pick": (["idle"], [60]),
-    "swing": (["windup", "punch", "punch", "windup"], [5, 4, 4, 9]),
-    "throw": (["punch"], [60]),
-    "lift": (["idle"], [60]),
-    "hold": (["idle"], [60]),
-    "holdswing": (["idle"], [60]),
-    "stomp": (["windup", "kick", "kick", "windup"], [4, 4, 4, 8]),
+    "getup": (["getup"], [60]),
+    "pick": (["pick"], [60]),
+    "swing": (["swing1", "swing2", "swing3"], [5, 4, 13]),
+    "throw": (["throw"], [60]),
+    "lift": (["hold"], [60]),
+    "hold": (["hold"], [60]),
+    "holdswing": (["hold"], [60]),
+    "stomp": (["windup", "stomp", "windup"], [4, 8, 8]),
 }
-LOOPING = {"walk", "run"}
+LOOPING = {"walk", "run", "walk_w", "run_w"}
 
 
 def key_background(im: np.ndarray) -> np.ndarray:
@@ -203,29 +229,83 @@ def nearest_palette(rgb: np.ndarray) -> np.ndarray:
     return CANON_IDX[out]
 
 
-def shrink(rgb, mask, scale):
+def keep_main(mask: np.ndarray) -> np.ndarray:
+    """Keep only the largest figure: drops speed lines and thrown objects."""
+    q = 4
+    H, W = mask.shape
+    sh, sw = H // q, W // q
+    small = mask[: sh * q, : sw * q].reshape(sh, q, sw, q).any(axis=(1, 3))
+    grown = small.copy()
+    g = grown.copy()
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            g |= np.roll(np.roll(grown, dy, 0), dx, 1)
+    grown = g
+    lab, n = label(grown)
+    areas = np.bincount(lab.ravel(), minlength=n + 1)
+    areas[0] = 0
+    keep = np.kron(lab == int(areas.argmax()), np.ones((q, q), dtype=bool))
+    out = np.zeros_like(mask)
+    out[: keep.shape[0], : keep.shape[1]] = mask[: keep.shape[0], : keep.shape[1]] & keep
+    return out
+
+
+def dilate(m: np.ndarray, r: int) -> np.ndarray:
+    out = m.copy()
+    for d in range(1, r + 1):
+        out[:, d:] |= m[:, :-d]
+        out[:, :-d] |= m[:, d:]
+    m2 = out.copy()
+    for d in range(1, r + 1):
+        out[d:] |= m2[:-d]
+        out[:-d] |= m2[d:]
+    return out
+
+
+def erase_rock(rgb: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """Remove a gray boulder held overhead, keeping the skin-coloured hands."""
+    mx, mn = rgb.max(-1), rgb.min(-1)
+    ys, _ = np.nonzero(mask)
+    top, height = ys.min(), ys.max() - ys.min()
+    band = np.zeros_like(mask)
+    band[: top + int(height * 0.30)] = True
+    gray = ((mx - mn) < 30) & (mx > 70) & (mx < 215) & mask & band
+    skin = (rgb[..., 0] > 190) & (rgb[..., 1] > 120) & (rgb[..., 1] < 215) & (rgb[..., 2] > 70) \
+        & (rgb[..., 2] < 170) & ((rgb[..., 0] - rgb[..., 2]) > 50)
+    remove = dilate(gray, 9) & ~skin & band
+    out = mask & ~remove
+    hands = skin & out & band
+    if hands.any():
+        top_skin = np.nonzero(hands)[0].min()
+        above = np.arange(mask.shape[0])[:, None] < top_skin + 2
+        out &= ~(above & ~skin)
+    return out
+
+
+def shrink(rgb, mask, scale, flip=False):
     """Return CELL_H x CELL_W index frame (-1 = transparent)."""
     ys, xs = np.nonzero(mask)
     x0, x1, y0, y1 = xs.min(), xs.max() + 1, ys.min(), ys.max() + 1
-    band = ys >= y1 - max(4, int((y1 - y0) * FEET_BAND))
-    ax = (xs[band].min() + xs[band].max() + 1) / 2
     pad = int(scale * 2)
-    cx0, cy0 = max(0, x0 - pad), max(0, y0 - pad)
-    cx1, cy1 = min(mask.shape[1], x1 + pad), min(mask.shape[0], y1 + pad)
-    idx = nearest_palette(rgb[cy0:cy1, cx0:cx1])
-    m = mask[cy0:cy1, cx0:cx1]
+    sub_rgb = np.pad(rgb[y0:y1, x0:x1], ((pad, pad), (pad, pad), (0, 0)))
+    m = np.pad(mask[y0:y1, x0:x1], pad)
+    if flip:
+        sub_rgb, m = sub_rgb[:, ::-1], m[:, ::-1]
+    ys, xs = np.nonzero(m)
+    bottom = ys.max() + 1
+    band = ys >= bottom - max(4, int((bottom - ys.min()) * FEET_BAND))
+    ax = (xs[band].min() + xs[band].max() + 1) / 2
+    idx = nearest_palette(sub_rgb)
     frame = np.full((CELL_H, CELL_W), -1, np.int32)
     for ty in range(CELL_H):
-        sy0 = y1 + (ty - AY) * scale - cy0
-        sy1 = sy0 + scale
-        a, b = int(np.floor(sy0)), int(np.ceil(sy1))
+        sy0 = bottom + (ty - AY) * scale
+        a, b = int(np.floor(sy0)), int(np.ceil(sy0 + scale))
         if b <= 0 or a >= m.shape[0]:
             continue
         a, b = max(a, 0), min(b, m.shape[0])
         for tx in range(CELL_W):
-            sx0 = ax + (tx - AX) * scale - cx0
-            sx1 = sx0 + scale
-            c, d = int(np.floor(sx0)), int(np.ceil(sx1))
+            sx0 = ax + (tx - AX) * scale
+            c, d = int(np.floor(sx0)), int(np.ceil(sx0 + scale))
             if d <= 0 or c >= m.shape[1]:
                 continue
             c, d = max(c, 0), min(d, m.shape[1])
@@ -233,8 +313,7 @@ def shrink(rgb, mask, scale):
             if mb.size == 0 or mb.mean() < MIN_FILL:
                 continue
             counts = np.bincount(idx[a:b, c:d][mb], minlength=len(NAMES))
-            tot = counts.sum()
-            frame[ty, tx] = 0 if counts[0] / tot >= OUTLINE_SHARE else int(counts.argmax())
+            frame[ty, tx] = 0 if counts[0] / counts.sum() >= OUTLINE_SHARE else int(counts.argmax())
     return frame
 
 
@@ -249,33 +328,60 @@ def tidy(frame: np.ndarray) -> np.ndarray:
     return out
 
 
-def lying_from(idle: np.ndarray) -> np.ndarray:
-    ys, xs = np.nonzero(idle >= 0)
-    crop = idle[ys.min():ys.max() + 1, xs.min():xs.max() + 1]
-    rot = np.rot90(crop, 1)
-    out = np.full_like(idle, -1)
-    h, w = rot.shape
-    x0 = AX - w // 2
-    y0 = AY - h
-    out[y0:y0 + h, x0:x0 + w] = rot
+def drop_small(frame: np.ndarray, min_area: int = 8) -> np.ndarray:
+    """Remove tiny detached specks (impact marks) that are not part of the figure."""
+    lab, n = label(frame >= 0)
+    if n < 2:
+        return frame
+    areas = np.bincount(lab.ravel(), minlength=n + 1)
+    out = frame.copy()
+    for k in range(1, n + 1):
+        if areas[k] < min_area:
+            out[lab == k] = -1
+    return out
+
+
+def auto_outline(frame: np.ndarray) -> np.ndarray:
+    """Close gaps in the outline: any empty pixel touching a coloured one becomes outline."""
+    out = frame.copy()
+    padded = np.pad(frame, 1, constant_values=-1)
+    for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        nb = padded[1 + dy:1 + dy + CELL_H, 1 + dx:1 + dx + CELL_W]
+        out[(frame < 0) & (nb > 0)] = 0
     return out
 
 
 def build_frames():
-    frames = {}
-    for fname, grid, names, ref in SHEETS:
+    frames, scales = {}, {}
+    sash = NAMES.index("sash")
+    for sh in SHEETS:
+        fname, names = sh["file"], sh["names"]
         im = np.asarray(Image.open(SRC / fname).convert("RGB")).astype(np.int32)
-        mask = key_background(im)
-        poses = split_poses(mask, grid, names)
+        poses = split_poses(key_background(im), sh["grid"], names)
         missing = [n for n in names if not poses[n].any()]
         if missing:
             sys.exit(f"{fname}: could not find poses {missing}")
-        ry, _ = np.nonzero(poses[ref])
-        scale = (ry.max() + 1 - ry.min()) / TARGET_H
-        print(f"{fname}: reference '{ref}' is {ry.max() + 1 - ry.min()}px tall -> scale {scale:.2f}")
+        if "ref" in sh:
+            ry, _ = np.nonzero(poses[sh["ref"]])
+            scales[fname] = (ry.max() + 1 - ry.min()) / TARGET_H
+            print(f"{fname}: reference '{sh['ref']}' is {ry.max() + 1 - ry.min()}px tall -> scale {scales[fname]:.2f}")
+        else:
+            scales[fname] = scales[sh["scale_from"]]
+            print(f"{fname}: scale {scales[fname]:.2f} (from {sh['scale_from']})")
         for name in names:
-            frames[name] = tidy(shrink(im, poses[name], scale))
-    frames["lying"] = lying_from(frames["idle"])
+            if name in sh.get("skip", []):
+                continue
+            m = poses[name]
+            if name in sh.get("erase_rock", []):
+                m = erase_rock(im, m)
+            if sh.get("main_only"):
+                m = keep_main(m)
+            frames[name] = auto_outline(drop_small(tidy(shrink(im, m, scales[fname], name in sh.get("flip", [])))))
+    split = int(np.nonzero((frames["idle_w"] == sash).any(axis=1))[0].max()) + 1
+    for armed, base in ARMED.items():
+        out = frames[base].copy()
+        out[:split] = frames["idle_w"][:split]
+        frames[armed] = auto_outline(out)
     return frames
 
 
