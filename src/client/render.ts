@@ -93,7 +93,11 @@ export class Renderer {
     ctx.save();
     ctx.translate(ox, oy - Math.round(f.z));
     ctx.scale(f.r, 1);
-    if (!this.assets.draw(ctx, f.d, f.s, f.t)) this.sprites.draw(ctx, f.d, f.s, f.t, f.w);
+    if (this.assets.draw(ctx, f.d, f.s, f.t)) {
+      if (f.w) drawHeldStick(ctx, f.s, f.t);
+    } else {
+      this.sprites.draw(ctx, f.d, f.s, f.t, f.w);
+    }
     ctx.restore();
   }
 }
@@ -104,6 +108,21 @@ function shadow(ctx: CanvasRenderingContext2D, x: number, y: number, z: number, 
   ctx.beginPath();
   ctx.ellipse(x, y, r, 3, 0, 0, Math.PI * 2);
   ctx.fill();
+}
+
+function drawHeldStick(ctx: CanvasRenderingContext2D, st: number, t: number) {
+  if (st === St.Down || st === St.Dead || st === St.Held) return;
+  ctx.save();
+  ctx.translate(10, -14);
+  if (st === St.Swing) ctx.rotate(-1.9 + Math.min(1, t / 9) * 2.5);
+  else ctx.translate(0, -2);
+  ctx.fillStyle = '#805020';
+  if (st === St.Swing) ctx.fillRect(0, -2, 24, 3);
+  else ctx.fillRect(0, -18, 3, 22);
+  ctx.fillStyle = '#c88840';
+  if (st === St.Swing) ctx.fillRect(0, -2, 24, 1);
+  else ctx.fillRect(0, -18, 1, 22);
+  ctx.restore();
 }
 
 function drawSpark(ctx: CanvasRenderingContext2D, e: Fx, cam: number, k: number) {

@@ -50,15 +50,33 @@ npm start
 
 尚未實作：壓敵／椿拳／連毆、握敵迴旋、桶子、推車、對話與首領加盟、商店、地圖與選單等。
 
-## 換成自訂美術
+## 美術
 
-沒有放素材時，遊戲用內建的像素角色。要使用自己的圖（請確認你有權使用；不是自己創作的素材請只供私下使用，不要公開散布）：
+遊戲讀取 `assets/manifest.json` 裡的角色圖；沒有對應圖或動作時，退回內建的像素角色。目前 `assets/gen/` 是由 AI 出圖轉出的四個角色（主角與三種換色的敵人）。
 
-1. 把角色圖檔放進 `assets/`（此資料夾內容已被 git 忽略，不會被上傳）。
-2. 複製 `assets/manifest.example.json` 為 `assets/manifest.json`，依你的圖調整。每個角色是一張格狀圖（sprite sheet）：`w`/`h` 是單格大小，`ox`/`oy` 是腳底中心在格內的位置，`anims` 把狀態名對應到格子編號（由左到右、由上到下，從 0 起算）。
-3. 角色代號：`kunimasa`（國政）、`rikigoro`（力五郎）、`zako`（雜兵）、`ginpa`（銀八）。
-4. 可用狀態名：`idle walk run jump punch kick airkick dash upper hurt down getup swing throw lift hold held stomp dead pick holdswing`。缺少的狀態會退回 `idle`。
-5. 重新整理頁面即可，不用重新建置。
+### AI 出圖 → 遊戲素材
+
+1. 用圖像模型出動作表（3x2 格、純色背景、角色朝右、同一個人），存成 PNG 或 JPG 放進 `art-src/`。
+2. 在 `tools/build_sprites.py` 最上方的 `SHEETS` 登記檔名、格數與每格的動作名稱。
+3. 執行：
+
+```bash
+pip install pillow numpy
+python3 tools/build_sprites.py --preview preview.png
+```
+
+工具會自動去背、切格、縮成遊戲大小、對齊腳底、限制調色盤，並輸出四個換色角色與 `assets/manifest.json`。`preview.png` 可以快速檢查每一格。
+
+目前已有的動作：待機、走路、跑步、跳、出拳、踢、跳踢、衝撞、昇龍拳、倒地（由待機圖旋轉產生）。其餘動作（受傷、起身、舉敵、揮棍等）暫時借用相近的動作，等有新的動作表再補。
+
+### 使用自己的圖
+
+在 `assets/` 放圖並寫好 `manifest.json`（格式見 `assets/manifest.example.json`）。每個角色是一張格狀圖：`w`/`h` 是單格大小，`ox`/`oy` 是腳底中心在格內的位置，`anims` 把狀態名對應到格子編號（由左到右、由上到下，從 0 起算）。動作可寫成 `{"frames": [..], "ticks": [..], "loop": true}` 指定每格停留的遊戲刻數（60 刻 = 1 秒），或直接寫格子編號陣列。
+
+- 角色代號：`kunimasa`、`rikigoro`、`zako`、`ginpa`。
+- 可用狀態名：`idle walk run jump punch kick airkick dash upper hurt down getup swing throw lift hold held stomp dead pick holdswing`。缺少的狀態會退回 `idle`。
+- 重新整理頁面即可，不用重新建置。
+- `assets/` 內除了 `manifest.json` 與 `gen/` 以外的檔案不會被 git 上傳；不是自己創作的素材請只供私下使用，不要公開散布。
 
 ## 開發
 

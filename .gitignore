@@ -4,3 +4,6 @@ dist/
 assets/*
 !assets/.gitkeep
 !assets/manifest.example.json
+!assets/manifest.json
+!assets/gen/
+!assets/gen/*.png
