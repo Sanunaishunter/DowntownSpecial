@@ -127,6 +127,8 @@ ANIMS = {
     "hold": (["hold"], [60]),
     "holdswing": (["hold"], [60]),
     "stomp": (["windup", "stomp", "windup"], [4, 8, 8]),
+    "beam": (["throw"], [60]),
+    "shoot": (["windup", "punch", "windup"], [2, 6, 2]),
 }
 LOOPING = {"walk", "run", "walk_w", "run_w"}
 

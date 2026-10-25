@@ -14,6 +14,12 @@ const KEYMAP: Record<string, number> = {
   KeyK: Btn.B,
   KeyX: Btn.B,
   Space: Btn.A | Btn.B,
+  Digit1: Btn.S1,
+  Digit2: Btn.S2,
+  Digit3: Btn.S3,
+  Digit4: Btn.S4,
+  Digit5: Btn.S5,
+  Digit6: Btn.S6,
 };
 
 export class Input {
@@ -72,7 +78,11 @@ export class Input {
   }
 }
 
-export function setupTouch(input: Input) {
+export interface TouchApi {
+  bind(el: HTMLElement, bits: number): void;
+}
+
+export function setupTouch(input: Input): TouchApi {
   const dpad = document.getElementById('dpad')!;
   const knob = document.getElementById('knob')!;
   let dirMask = 0;
@@ -122,8 +132,8 @@ export function setupTouch(input: Input) {
   dpad.addEventListener('pointerup', dpadEnd);
   dpad.addEventListener('pointercancel', dpadEnd);
 
-  const bindBtn = (id: string, bits: number) => {
-    const el = document.getElementById(id)!;
+  const bindBtn = (el: HTMLElement, bits: number) => {
+    const id = el.id || `btn${bits}`;
     let pid = -1;
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -144,7 +154,8 @@ export function setupTouch(input: Input) {
     el.addEventListener('pointercancel', end);
     el.addEventListener('contextmenu', (e) => e.preventDefault());
   };
-  bindBtn('tb-a', Btn.A);
-  bindBtn('tb-b', Btn.B);
-  bindBtn('tb-j', Btn.A | Btn.B);
+  bindBtn(document.getElementById('tb-a')!, Btn.A);
+  bindBtn(document.getElementById('tb-b')!, Btn.B);
+  bindBtn(document.getElementById('tb-j')!, Btn.A | Btn.B);
+  return { bind: bindBtn };
 }

@@ -188,7 +188,7 @@ function lyingFrom(g: Grid): Grid {
 export function buildPose(pose: string, frame: number, weapon: number): Grid {
   const g = newGrid();
   const c: Ctx = { g, tx: 14, ty: 18, hx: 15, hy: 8, face: 'n' };
-  const withStick = weapon > 0;
+  const withStick = weapon === 1;
 
   switch (pose) {
     case 'idle': {
@@ -382,13 +382,13 @@ export function buildPose(pose: string, frame: number, weapon: number): Grid {
       legStand(g, f === 0 ? 21 : 22, 26, true);
       if (f === 0) {
         armUp(g, 24, 13, 6);
-        line(g, 25, 12, 19, 0);
+        if (withStick) line(g, 25, 12, 19, 0);
       } else if (f === 1) {
         armFwd(g, 24, 17, 6);
-        line(g, 32, 17, 38, 4);
+        if (withStick) line(g, 32, 17, 38, 4);
       } else {
         armFwd(g, 24, 22, 6);
-        line(g, 32, 22, 38, 34);
+        if (withStick) line(g, 32, 22, 38, 34);
       }
       break;
     }

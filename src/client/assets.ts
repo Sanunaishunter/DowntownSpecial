@@ -70,10 +70,10 @@ export class Assets {
     return this.sheets.has(def);
   }
 
-  draw(ctx: CanvasRenderingContext2D, def: string, st: number, t: number, weapon = 0): 0 | 1 | 2 {
+  draw(ctx: CanvasRenderingContext2D, def: string, st: number, t: number, weapon = 0, animName?: string): 0 | 1 | 2 {
     const s = this.sheets.get(def);
     if (!s) return 0;
-    const name = ST_NAMES[st] ?? 'idle';
+    const name = animName ?? ST_NAMES[st] ?? 'idle';
     const armed = weapon ? s.def.anims[`${name}_w`] : undefined;
     const anim = armed ?? s.def.anims[name] ?? s.def.anims.idle;
     if (!anim) return 0;

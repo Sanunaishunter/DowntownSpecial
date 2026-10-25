@@ -1,24 +1,15 @@
-import { Btn, GRAVITY, GROUND_MAX, GROUND_MIN, JUMP_V, MAX_PLAYERS, SCREEN_W, STAGE_W } from './constants';
+import { Btn, GRAVITY, GROUND_MAX, GROUND_MIN, JUMP_V, MAX_PLAYERS, SCREEN_W, SPECIAL_MASK, STAGE_W } from './constants';
 import { DEFS, PLAYER_DEFS } from './defs';
+import { BEAM, MP_MAX, MP_PER_HIT, MP_PER_KNOCKDOWN, VOLLEY } from './specials';
 import { STAGE, type WaveDef } from './stage';
 import { St, type Fighter, type PlayerInput, type Snapshot, type World } from './types';
+import { BULLET, UNLIMITED, WEAPONS, type AtkDef } from './weapons';
 
 const PEND_WINDOW = 3;
 const UPPER_WINDOW = 12;
 const AB = Btn.A | Btn.B;
 const HOLD_Z = 34;
-
-interface AtkDef {
-  start: number;
-  active: number;
-  total: number;
-  dmg: number;
-  reach: number;
-  kbx: number;
-  knock: boolean;
-  launch: number;
-  stun: number;
-}
+const DROP_RATE = 0.22;
 
 const ATK: Record<number, AtkDef> = {
   [St.Punch]: { start: 2, active: 3, total: 12, dmg: 6, reach: 20, kbx: 1.0, knock: false, launch: 0, stun: 20 },
@@ -82,6 +73,11 @@ function mkFighter(w: World, def: string, slot: number, x: number, y: number): F
     cd: 0,
     aiT: 0,
     lastSlot: -1,
+    wn: 0,
+    mp: 0,
+    volley: 0,
+    volleyCd: 0,
+    cast: 0,
   };
 }
 
@@ -93,6 +89,7 @@ export function createWorld(seed = 1): World {
     nextId: 1,
     fighters: [],
     items: [],
+    shots: [],
     ev: [],
     cam: 0,
     camMax: STAGE.waves[0].at,
@@ -109,6 +106,7 @@ export function resetWorld(w: World) {
   w.stageT = 0;
   w.fighters = [];
   w.items = [];
+  w.shots = [];
   w.ev = [];
   w.cam = 0;
   w.camMax = STAGE.waves[0].at;
@@ -173,6 +171,7 @@ export function step(w: World, inputs: Array<PlayerInput | undefined>) {
   applyAttacks(w);
   applyThrown(w);
   updateItems(w);
+  updateShots(w);
   w.fighters = w.fighters.filter((f) => !(!isPlayer(f) && f.st === St.Dead && f.t >= 40));
   updateStage(w);
 }
@@ -262,6 +261,12 @@ function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
       }
     }
   }
+  if (f.cast > 0) f.cast--;
+  if (f.volley > 0) tickVolley(w, f);
+  if ((pressed & SPECIAL_MASK) && f.mp >= MP_MAX && f.volley === 0 && (f.st === St.Idle || f.st === St.Walk || f.st === St.Run)) {
+    startSpecial(f, pressed);
+  }
+  if (f.st === St.Shoot && f.t >= 9 && held & Btn.A && !(held & Btn.B) && f.wn > 0) setSt(f, St.Shoot);
   updateBody(w, f);
 }
 
@@ -306,11 +311,10 @@ function resolveAction(w: World, f: Fighter, a: boolean, b: boolean, dx: number)
     return;
   }
   if (f.weapon) {
-    if (a) {
-      setSt(f, St.Swing);
-    } else {
-      throwWeapon(w, f);
-    }
+    const wd = WEAPONS[f.weapon];
+    if (wd.mode === 'ranged' && a && f.wn > 0) setSt(f, St.Shoot);
+    else if (b && wd.throwable) throwWeapon(w, f);
+    else setSt(f, St.Swing);
     f.vx = 0;
     f.vy = 0;
     return;
@@ -319,6 +323,7 @@ function resolveAction(w: World, f: Fighter, a: boolean, b: boolean, dx: number)
   if (it) {
     w.items = w.items.filter((x) => x !== it);
     f.weapon = it.kind;
+    f.wn = it.n;
     setSt(f, St.Pick);
     f.vx = 0;
     f.vy = 0;
@@ -373,6 +378,7 @@ function nearestItem(w: World, f: Fighter) {
 }
 
 function throwWeapon(w: World, f: Fighter) {
+  const wd = WEAPONS[f.weapon];
   setSt(f, St.Throw);
   w.items.push({
     id: w.nextId++,
@@ -380,12 +386,14 @@ function throwWeapon(w: World, f: Fighter) {
     x: f.x + f.face * 8,
     y: f.y,
     z: f.z + 14,
-    vx: f.face * 4.2,
+    vx: f.face * wd.throwVx,
     vy: 0,
     vz: 0.8,
     owner: f.slot + 1,
+    n: f.wn,
   });
   f.weapon = 0;
+  f.wn = 0;
 }
 
 function throwHeld(w: World, f: Fighter) {
@@ -537,7 +545,19 @@ function updateBody(w: World, f: Fighter) {
     case St.Throw:
       f.vx = 0;
       f.vy = 0;
-      if (f.t >= (ATK[f.st]?.total ?? (f.st === St.Pick ? 10 : 12))) setSt(f, St.Idle);
+      if (f.t >= (atkFor(f)?.total ?? (f.st === St.Pick ? 10 : 12))) setSt(f, St.Idle);
+      break;
+    case St.Shoot:
+      f.vx = 0;
+      f.vy = 0;
+      if (f.t === 2) fireBullet(w, f);
+      if (f.t >= 10) {
+        if (f.wn <= 0) breakWeapon(w, f);
+        setSt(f, St.Idle);
+      }
+      break;
+    case St.Beam:
+      updateBeam(w, f);
       break;
     case St.HoldSwing:
       f.vx = 0;
@@ -608,14 +628,18 @@ function die(w: World, f: Fighter) {
     s.lives--;
     s.rt = 0;
     f.weapon = 0;
-  } else if (f.lastSlot >= 0 && w.slots[f.lastSlot]) {
-    w.slots[f.lastSlot].score += DEFS[f.def].score;
+    f.wn = 0;
+    f.mp = 0;
+    f.volley = 0;
+  } else {
+    if (f.lastSlot >= 0 && w.slots[f.lastSlot]) w.slots[f.lastSlot].score += DEFS[f.def].score;
+    dropOnDeath(w, f);
   }
 }
 
 // ---------- combat ----------
 
-function hit(w: World, t: Fighter, srcSlot: number, dmg: number, kbx: number, knock: boolean, launch: number, dir: number) {
+function hit(w: World, t: Fighter, srcSlot: number, dmg: number, kbx: number, knock: boolean, launch: number, dir: number, gain = true) {
   if (t.holding) dropHeld(w, t);
   t.pend = 0;
   t.pendT = 0;
@@ -624,10 +648,16 @@ function hit(w: World, t: Fighter, srcSlot: number, dmg: number, kbx: number, kn
   t.combo++;
   const down = t.hp <= 0 || knock || t.combo >= 3 || t.z > 0;
   t.face = dir > 0 ? -1 : 1;
+  if (gain && srcSlot >= 0) gainEnergy(w, srcSlot, MP_PER_HIT + (down ? MP_PER_KNOCKDOWN : 0));
   if (down) {
     if (t.weapon) {
-      w.items.push({ id: w.nextId++, kind: t.weapon, x: t.x, y: t.y, z: t.z, vx: 0, vy: 0, vz: 0, owner: 0 });
+      w.items.push({ id: w.nextId++, kind: t.weapon, x: t.x, y: t.y, z: t.z, vx: 0, vy: 0, vz: 0, owner: 0, n: t.wn });
       t.weapon = 0;
+      t.wn = 0;
+    }
+    if (t.volley) {
+      t.volley = 0;
+      t.mp = 0;
     }
     setSt(t, St.Down);
     t.vz = launch > 0 ? launch : 1.8;
@@ -646,7 +676,7 @@ function hit(w: World, t: Fighter, srcSlot: number, dmg: number, kbx: number, kn
 
 function applyAttacks(w: World) {
   for (const a of w.fighters) {
-    const atk = ATK[a.st];
+    const atk = atkFor(a);
     if (!atk || a.heldBy) continue;
     if (a.t < atk.start || a.t >= atk.start + atk.active) continue;
     if (a.st === St.HoldSwing && a.t === atk.start) {
@@ -671,8 +701,10 @@ function applyAttacks(w: World) {
         t.t = Math.min(t.t, 20);
         if (a.slot >= 0) t.lastSlot = a.slot;
         w.ev.push([t.x, t.y, 6, 0]);
+        if (a.slot >= 0) gainEnergy(w, a.slot, 3);
       } else {
         hit(w, t, a.slot, dmg, atk.kbx, atk.knock, atk.launch, a.face);
+        if (a.st === St.Swing) useWeapon(w, a);
       }
     }
   }
@@ -710,7 +742,7 @@ function updateItems(w: World) {
       for (const t of w.fighters) {
         if (isPlayer(t) || !vulnerable(t)) continue;
         if (Math.abs(t.x - it.x) <= 12 && Math.abs(t.y - it.y) <= 10 && Math.abs(t.z + 12 - it.z) <= 22) {
-          hit(w, t, it.owner - 1, 12, 1.8, true, 2.2, it.vx >= 0 ? 1 : -1);
+          hit(w, t, it.owner - 1, WEAPONS[it.kind]?.throwDmg ?? 12, 1.8, true, 2.2, it.vx >= 0 ? 1 : -1);
           it.owner = 0;
           it.vx = 0;
           it.vy = 0;
@@ -720,6 +752,151 @@ function updateItems(w: World) {
     }
     it.x = clamp(it.x, 0, STAGE_W);
     it.y = clamp(it.y, GROUND_MIN, GROUND_MAX);
+  }
+}
+
+// ---------- weapons, specials, shots ----------
+
+function atkFor(f: Fighter): AtkDef | undefined {
+  if (f.st === St.Swing) {
+    const wd = WEAPONS[f.weapon];
+    if (wd) return wd.atk;
+  }
+  return ATK[f.st];
+}
+
+function useWeapon(w: World, f: Fighter) {
+  const wd = WEAPONS[f.weapon];
+  if (!wd || wd.mode === 'ranged' || wd.uses >= UNLIMITED) return;
+  if (--f.wn <= 0) breakWeapon(w, f);
+}
+
+function breakWeapon(w: World, f: Fighter) {
+  f.weapon = 0;
+  f.wn = 0;
+  w.ev.push([f.x + f.face * 10, f.y, f.z + 16, 2]);
+}
+
+function dropOnDeath(w: World, f: Fighter) {
+  const boss = f.kind === 'boss';
+  if (!boss && rand(w) >= DROP_RATE) return;
+  const defs = Object.values(WEAPONS);
+  const weights = defs.map((d) => (boss ? d.bossWeight : d.dropWeight));
+  const total = weights.reduce((a, b) => a + b, 0);
+  if (total <= 0) return;
+  let r = rand(w) * total;
+  let pick = defs[0];
+  for (let i = 0; i < defs.length; i++) {
+    r -= weights[i];
+    if (r < 0) {
+      pick = defs[i];
+      break;
+    }
+  }
+  w.items.push({ id: w.nextId++, kind: pick.id, x: f.x, y: f.y, z: 12, vx: 0, vy: 0, vz: 0.4, owner: 0, n: pick.uses });
+}
+
+function gainEnergy(w: World, slot: number, n: number) {
+  const s = w.slots[slot];
+  const p = s && s.a ? byId(w, s.fid) : undefined;
+  if (!p || p.st === St.Beam || p.volley > 0) return;
+  p.mp = Math.min(MP_MAX, p.mp + n);
+}
+
+function startSpecial(f: Fighter, pressed: number) {
+  if (pressed & Btn.S1) {
+    setSt(f, St.Beam);
+    f.vx = 0;
+    f.vy = 0;
+    f.pend = 0;
+    f.buf = 0;
+    f.bufT = 0;
+  } else if (pressed & Btn.S2) {
+    f.volley = VOLLEY.shots;
+    f.volleyCd = 0;
+  }
+}
+
+function tickVolley(w: World, f: Fighter) {
+  if (f.st === St.Hurt || f.st === St.Down || f.st === St.Dead || f.st === St.GetUp || f.st === St.Held) {
+    f.volley = 0;
+    f.mp = 0;
+    return;
+  }
+  if (--f.volleyCd > 0) return;
+  w.shots.push({ id: w.nextId++, kind: 1, x: f.x + f.face * 14, y: f.y, z: f.z + 16, vx: f.face * VOLLEY.speed, owner: f.slot + 1, life: VOLLEY.life });
+  f.volley--;
+  f.volleyCd = VOLLEY.gap;
+  f.cast = 8;
+  f.mp = f.volley * (MP_MAX / VOLLEY.shots);
+}
+
+function fireBullet(w: World, f: Fighter) {
+  w.shots.push({ id: w.nextId++, kind: 0, x: f.x + f.face * 16, y: f.y, z: f.z + 16, vx: f.face * BULLET.speed, owner: f.slot + 1, life: BULLET.life });
+  f.wn--;
+}
+
+function updateShots(w: World) {
+  for (const s of w.shots) {
+    s.x += s.vx;
+    if (--s.life <= 0 || s.x < w.cam - 20 || s.x > w.cam + SCREEN_W + 20) {
+      s.life = 0;
+      continue;
+    }
+    for (const t of w.fighters) {
+      if (isPlayer(t) || !vulnerable(t)) continue;
+      if (Math.abs(t.x - s.x) > 9 || Math.abs(t.y - s.y) > 8 || Math.abs(t.z + 14 - s.z) > 18) continue;
+      const dir = s.vx >= 0 ? 1 : -1;
+      if (s.kind === 1) hit(w, t, s.owner - 1, VOLLEY.dmg, 2.2, true, 2.4, dir, false);
+      else hit(w, t, s.owner - 1, BULLET.dmg, BULLET.kbx, false, 0, dir, true);
+      s.life = 0;
+      break;
+    }
+  }
+  w.shots = w.shots.filter((s) => s.life > 0);
+}
+
+function updateBeam(w: World, f: Fighter) {
+  f.vx = 0;
+  f.vy = 0;
+  f.inv = Math.max(f.inv, 2);
+  const fireT = f.t - BEAM.charge;
+  if (fireT >= BEAM.fire) {
+    f.mp = 0;
+    setSt(f, St.Idle);
+    return;
+  }
+  if (fireT < 0) return;
+  f.mp = Math.round(MP_MAX * (1 - fireT / BEAM.fire));
+  if (fireT % BEAM.pulse !== 0) return;
+  const dmg = Math.max(1, Math.round(BEAM.dmg * DEFS[f.def].dmg));
+  for (const t of w.fighters) {
+    if (isPlayer(t) || t.heldBy) continue;
+    if (t.st === St.Down || t.st === St.GetUp || t.st === St.Dead) continue;
+    const rx = (t.x - f.x) * f.face;
+    if (rx < 4 || rx > BEAM.len + 10) continue;
+    if (Math.abs(t.y - f.y) > BEAM.halfDepth) continue;
+    if (Math.abs(t.z - f.z - 14) > 30) continue;
+    if (t.holding) dropHeld(w, t);
+    t.hp = Math.max(0, t.hp - dmg);
+    t.lastSlot = f.slot;
+    t.pend = 0;
+    t.pendT = 0;
+    if (t.hp <= 0) {
+      setSt(t, St.Down);
+      t.vz = 2.4;
+      t.vx = f.face * 2;
+      t.vy = 0;
+      t.combo = 0;
+      w.ev.push([t.x, t.y, t.z + 14, 1]);
+    } else {
+      if (t.st !== St.Hurt) setSt(t, St.Hurt);
+      t.t = 0;
+      t.stun = 12;
+      t.vx = 0;
+      t.vy = 0;
+      w.ev.push([t.x, t.y, t.z + 14, 0]);
+    }
   }
 }
 
@@ -735,7 +912,7 @@ function spawnWave(w: World, wd: WaveDef) {
     w.fighters.push(f);
   }
   for (const it of wd.items ?? []) {
-    w.items.push({ id: w.nextId++, kind: it.kind, x: it.x, y: it.y, z: 0, vx: 0, vy: 0, vz: 0, owner: 0 });
+    w.items.push({ id: w.nextId++, kind: it.kind, x: it.x, y: it.y, z: 0, vx: 0, vy: 0, vz: 0, owner: 0, n: WEAPONS[it.kind]?.uses ?? 0 });
   }
 }
 
@@ -818,8 +995,12 @@ export function snapshot(w: World): Snapshot {
       m: f.maxHp,
       w: f.weapon,
       v: f.inv,
+      e: Math.round(f.mp),
+      n: f.wn,
+      c: f.cast,
     })),
     it: w.items.map((i) => ({ i: i.id, k: i.kind, x: r1(i.x), y: r1(i.y), z: r1(i.z) })),
+    sh: w.shots.map((s) => ({ k: s.kind, x: r1(s.x), y: r1(s.y), z: r1(s.z), r: (s.vx >= 0 ? 1 : -1) as 1 | -1 })),
     ev: w.ev.map((e) => [r1(e[0]), r1(e[1]), r1(e[2]), e[3]] as Snapshot['ev'][number]),
   };
   w.ev.length = 0;

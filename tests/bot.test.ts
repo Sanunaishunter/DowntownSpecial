@@ -5,6 +5,7 @@ import { St, type Fighter, type PlayerInput, type World } from '../src/shared/ty
 
 function botInput(w: World, me: Fighter, n: number): PlayerInput {
   if (me.st === St.Dead) return { held: 0, pressed: 0 };
+  if (me.st === St.Hold) return { held: Btn.Right, pressed: n % 20 === 0 ? Btn.B : 0 };
   const foes = w.fighters.filter((f) => f.kind !== 'player' && f.st !== St.Dead && f.heldBy === 0);
   const standing = foes.filter((f) => f.st !== St.Down && f.st !== St.GetUp);
   const pool = standing.length ? standing : foes;

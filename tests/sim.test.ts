@@ -152,7 +152,7 @@ describe('sim', () => {
   it('picks up, swings and throws a weapon', () => {
     const w = setup();
     const p = w.fighters[0];
-    w.items.push({ id: w.nextId++, kind: 1, x: p.x + 4, y: p.y, z: 0, vx: 0, vy: 0, vz: 0, owner: 0 });
+    w.items.push({ id: w.nextId++, kind: 1, x: p.x + 4, y: p.y, z: 0, vx: 0, vy: 0, vz: 0, owner: 0, n: 14 });
     press(w, Btn.A);
     run(w, 14);
     expect(p.weapon).toBe(1);

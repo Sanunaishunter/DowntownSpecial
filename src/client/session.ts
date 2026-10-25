@@ -1,6 +1,7 @@
 import { TICK_MS } from '../shared/constants';
 import { addPlayer, createWorld, snapshot, step } from '../shared/sim';
 import type { GameEvent, Snapshot, World } from '../shared/types';
+import { WEAPONS } from '../shared/weapons';
 import type { Input } from './input';
 
 export interface Session {
@@ -19,9 +20,19 @@ export class LocalSession implements Session {
   private snap: Snapshot | null = null;
   private fx: GameEvent[] = [];
 
-  constructor(private input: Input) {
+  constructor(
+    private input: Input,
+    practice: { mp?: number; weapon?: number } = {},
+  ) {
     this.world = createWorld((Math.random() * 2 ** 31) | 0);
     addPlayer(this.world, 0);
+    const me = this.world.fighters[0];
+    if (practice.mp) me.mp = Math.min(100, practice.mp);
+    const wd = practice.weapon ? WEAPONS[practice.weapon] : undefined;
+    if (wd) {
+      me.weapon = wd.id;
+      me.wn = wd.uses;
+    }
     this.snap = snapshot(this.world);
   }
 

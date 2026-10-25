@@ -1,6 +1,8 @@
 import { SCREEN_H, SCREEN_W } from '../shared/constants';
 import { DEFS } from '../shared/defs';
-import { St, type GameEvent, type SnapFighter, type Snapshot } from '../shared/types';
+import { BEAM, MP_MAX } from '../shared/specials';
+import { St, type GameEvent, type SnapFighter, type SnapItem, type Snapshot } from '../shared/types';
+import { UNLIMITED, WEAPONS, WID } from '../shared/weapons';
 import type { Assets } from './assets';
 import { PixelSprites } from './pixelart';
 
@@ -57,18 +59,12 @@ export class Renderer {
     drawBackground(ctx, cam);
     if (!snap) return;
 
-    for (const it of snap.it) {
-      const sx = Math.round(it.x - cam);
-      const sy = Math.round(it.y);
-      shadow(ctx, sx, sy, it.z, 6);
-      ctx.fillStyle = '#8b5a2b';
-      ctx.fillRect(sx - 7, sy - 3 - Math.round(it.z), 14, 3);
-      ctx.fillStyle = '#c08850';
-      ctx.fillRect(sx - 7, sy - 3 - Math.round(it.z), 14, 1);
-    }
+    for (const it of snap.it) drawItem(ctx, it, cam);
 
     const fs = [...snap.f].sort((a, b) => a.y - b.y);
     for (const f of fs) this.drawFighter(f, cam, o.now);
+    for (const f of fs) if (f.s === St.Beam) drawBeam(ctx, f, cam, o.now);
+    for (const s of snap.sh) drawShot(ctx, s, cam, o.now);
 
     this.fx = this.fx.filter((e) => o.now - e.t0 < 200);
     for (const e of this.fx) drawSpark(ctx, e, cam, (o.now - e.t0) / 200);
@@ -79,7 +75,7 @@ export class Renderer {
   private drawFighter(f: SnapFighter, cam: number, now: number) {
     const ctx = this.ctx;
     const dead = f.s === St.Dead;
-    if (f.v > 0 && Math.floor(now / 70) % 2 === 0) return;
+    if (f.v > 2 && Math.floor(now / 70) % 2 === 0) return;
     if (dead && DEFS[f.d]?.kind !== 'player' && Math.floor(now / 90) % 2 === 0) return;
     const ox = Math.round(f.x - cam);
     const oy = Math.round(f.y);
@@ -87,9 +83,11 @@ export class Renderer {
     ctx.save();
     ctx.translate(ox, oy - Math.round(f.z));
     ctx.scale(f.r, 1);
-    const drawn = this.assets.draw(ctx, f.d, f.s, f.t, f.w);
+    const art = artFor(f);
+    const drawn = this.assets.draw(ctx, f.d, f.s, art.t, art.weapon, art.anim);
     if (drawn === 0) this.sprites.draw(ctx, f.d, f.s, f.t, f.w);
-    else if (drawn === 1 && f.w && (f.s === St.Idle || f.s === St.Walk || f.s === St.Run || f.s === St.Jump)) drawHeldStick(ctx, f.s, f.t);
+    else if (drawn === 1 && f.w === WID.Stick && (f.s === St.Idle || f.s === St.Walk || f.s === St.Run || f.s === St.Jump)) drawHeldStick(ctx, f.s, f.t);
+    drawWeaponInHand(ctx, f);
     ctx.restore();
   }
 }
@@ -100,6 +98,197 @@ function shadow(ctx: CanvasRenderingContext2D, x: number, y: number, z: number, 
   ctx.beginPath();
   ctx.ellipse(x, y, r, 3, 0, 0, Math.PI * 2);
   ctx.fill();
+}
+
+// Which sheet animation to use for a fighter. The stick has its own armed poses baked in;
+// other weapons reuse unarmed poses and are drawn on top.
+function artFor(f: SnapFighter): { weapon: number; anim?: string; t: number } {
+  if (f.s === St.Beam) return { weapon: 0, anim: 'beam', t: f.t };
+  if ((f.s === St.Idle || f.s === St.Walk || f.s === St.Run) && f.c > 0) return { weapon: 0, anim: 'punch', t: 3 };
+  if (!f.w) return { weapon: 0, t: f.t };
+  if (f.w === WID.Stick) return { weapon: 1, t: f.t };
+  switch (f.s) {
+    case St.Swing:
+    case St.Shoot:
+      return { weapon: 0, anim: 'punch', t: f.t };
+    case St.Idle:
+    case St.Walk:
+    case St.Run:
+    case St.Jump:
+      return { weapon: 0, anim: f.w === WID.Stone ? 'hold' : undefined, t: f.t };
+    default:
+      return { weapon: 0, t: f.t };
+  }
+}
+
+// Draws a weapon pointing along +x with the grip at the origin.
+function weaponGfx(ctx: CanvasRenderingContext2D, kind: number) {
+  const R = (c: string, x: number, y: number, w: number, h: number) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(x, y, w, h);
+  };
+  switch (kind) {
+    case WID.Stick:
+      R('#805020', -3, -1, 28, 3);
+      R('#c88840', -3, -1, 28, 1);
+      break;
+    case WID.Bamboo:
+      R('#101010', -5, -2, 8, 5);
+      R('#3a2a1c', -5, -1, 7, 3);
+      R('#e8d080', 2, -1, 24, 3);
+      R('#b89c48', 2, 1, 24, 1);
+      R('#a08030', 9, -1, 1, 3);
+      R('#a08030', 17, -1, 1, 3);
+      R('#2a2a2a', 1, -2, 2, 5);
+      break;
+    case WID.Saber:
+      R('rgba(80,230,255,0.28)', 4, -3, 29, 7);
+      R('#4de6ff', 4, -1, 27, 3);
+      R('#ffffff', 4, 0, 27, 1);
+      R('#b0b0b8', -4, -1, 8, 3);
+      R('#606068', -1, -1, 1, 3);
+      R('#606068', 2, -1, 1, 3);
+      break;
+    case WID.Stone:
+      ctx.fillStyle = '#101018';
+      ctx.beginPath();
+      ctx.ellipse(6, 0, 8, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#6a6a74';
+      ctx.beginPath();
+      ctx.ellipse(6, 0, 7, 5, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#9a9aa6';
+      ctx.fillRect(2, -3, 4, 2);
+      R('#4a4a54', 7, 1, 4, 2);
+      break;
+    case WID.Rifle:
+      R('#6a3c18', -7, -1, 9, 4);
+      R('#2c2c32', 2, -2, 13, 4);
+      R('#4c4c56', 2, -2, 13, 1);
+      R('#2c2c32', 15, -1, 10, 2);
+      R('#7a4a20', 14, 0, 7, 2);
+      R('#2c2c32', 6, 2, 3, 6);
+      break;
+    default:
+      break;
+  }
+}
+
+function drawWeaponInHand(ctx: CanvasRenderingContext2D, f: SnapFighter) {
+  const k = f.w;
+  if (!k || k === WID.Stick) return;
+  if (f.s === St.Down || f.s === St.Dead || f.s === St.Held || f.s === St.Hurt || f.s === St.Beam) return;
+  const wd = WEAPONS[k];
+  ctx.save();
+  if (f.s === St.Swing) {
+    const p = Math.min(1, f.t / (wd.atk.start + wd.atk.active + 2));
+    ctx.translate(9, -22);
+    ctx.rotate(-1.9 + p * 2.5);
+    weaponGfx(ctx, k);
+  } else if (f.s === St.Shoot) {
+    ctx.translate(9, -22);
+    ctx.rotate(-0.05);
+    weaponGfx(ctx, k);
+    if (f.t >= 2 && f.t <= 5) {
+      ctx.fillStyle = '#fff2a0';
+      ctx.fillRect(25, -4, 6, 7);
+      ctx.fillStyle = '#ff9a30';
+      ctx.fillRect(28, -2, 6, 3);
+    }
+  } else if (k === WID.Stone) {
+    ctx.translate(-4, -49);
+    weaponGfx(ctx, k);
+  } else if (k === WID.Rifle) {
+    ctx.translate(8, -21);
+    ctx.rotate(-0.08);
+    weaponGfx(ctx, k);
+  } else {
+    ctx.translate(11, -19);
+    ctx.rotate(-Math.PI / 2 + 0.1);
+    weaponGfx(ctx, k);
+  }
+  ctx.restore();
+}
+
+function drawItem(ctx: CanvasRenderingContext2D, it: SnapItem, cam: number) {
+  const sx = Math.round(it.x - cam);
+  const sy = Math.round(it.y);
+  shadow(ctx, sx, sy, it.z, 7);
+  ctx.save();
+  ctx.translate(sx - (it.k === WID.Stone ? 6 : 10), sy - 3 - Math.round(it.z));
+  weaponGfx(ctx, it.k);
+  ctx.restore();
+}
+
+function drawShot(ctx: CanvasRenderingContext2D, s: { k: number; x: number; y: number; z: number; r: 1 | -1 }, cam: number, now: number) {
+  const sx = Math.round(s.x - cam);
+  const sy = Math.round(s.y - s.z);
+  if (s.k === 1) {
+    for (let i = 1; i <= 4; i++) {
+      ctx.fillStyle = `rgba(255,160,50,${0.32 - i * 0.06})`;
+      ctx.beginPath();
+      ctx.arc(sx - s.r * i * 4, sy, 5 - i * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const pulse = 1 + Math.sin(now / 40) * 0.5;
+    ctx.fillStyle = 'rgba(255,140,40,0.45)';
+    ctx.beginPath();
+    ctx.arc(sx, sy, 7 + pulse, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffb040';
+    ctx.beginPath();
+    ctx.arc(sx, sy, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff4cc';
+    ctx.beginPath();
+    ctx.arc(sx, sy, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    ctx.fillStyle = 'rgba(255,176,48,0.55)';
+    ctx.fillRect(s.r > 0 ? sx - 14 : sx + 4, sy, 10, 1);
+    ctx.fillStyle = '#fff3b0';
+    ctx.fillRect(s.r > 0 ? sx - 5 : sx, sy, 6, 1);
+  }
+}
+
+function drawBeam(ctx: CanvasRenderingContext2D, f: SnapFighter, cam: number, now: number) {
+  const sy = Math.round(f.y - f.z) - 20;
+  const hx = Math.round(f.x - cam) + f.r * 14;
+  const orb = (r: number) => {
+    ctx.fillStyle = 'rgba(60,170,255,0.35)';
+    ctx.beginPath();
+    ctx.arc(hx, sy, r * 1.7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#5ae8ff';
+    ctx.beginPath();
+    ctx.arc(hx, sy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(hx, sy, r * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+  };
+  if (f.t < BEAM.charge) {
+    orb(2 + (f.t / BEAM.charge) * 6 + Math.sin(now / 30));
+    return;
+  }
+  const fireT = f.t - BEAM.charge;
+  const th = 4 + Math.sin(now / 55) * 1.2 + Math.min(4, fireT / 6);
+  const len = BEAM.len;
+  const x0 = f.r > 0 ? hx : hx - len;
+  ctx.fillStyle = 'rgba(60,170,255,0.28)';
+  ctx.fillRect(x0, Math.round(sy - th * 1.7), len, Math.round(th * 3.4));
+  ctx.fillStyle = 'rgba(90,230,255,0.8)';
+  ctx.fillRect(x0, Math.round(sy - th), len, Math.round(th * 2));
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x0, Math.round(sy - th * 0.4), len, Math.max(1, Math.round(th * 0.8)));
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  for (let i = 0; i < 9; i++) {
+    const off = (((i * 37 + (now / 5) * f.r) % len) + len) % len;
+    ctx.fillRect(Math.round(x0 + off), Math.round(sy + ((i * 7) % 9) - 4), 5, 1);
+  }
+  orb(6 + Math.sin(now / 35));
 }
 
 function drawHeldStick(ctx: CanvasRenderingContext2D, st: number, t: number) {
@@ -121,7 +310,7 @@ function drawSpark(ctx: CanvasRenderingContext2D, e: Fx, cam: number, k: number)
   const cx = e.x - cam;
   const cy = e.y - e.z;
   const len = (e.k ? 9 : 6) * (0.5 + k);
-  ctx.strokeStyle = e.k ? '#ffe060' : '#ffffff';
+  ctx.strokeStyle = e.k === 2 ? '#c8c8d0' : e.k ? '#ffe060' : '#ffffff';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   for (let i = 0; i < 8; i++) {
@@ -212,6 +401,16 @@ function bar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, hp:
   ctx.fillRect(x, y, Math.round(w * k), 5);
 }
 
+function energyBar(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, e: number, now: number) {
+  const k = Math.max(0, Math.min(1, e / MP_MAX));
+  ctx.fillStyle = '#000';
+  ctx.fillRect(x - 1, y - 1, w + 2, 5);
+  ctx.fillStyle = '#10243e';
+  ctx.fillRect(x, y, w, 3);
+  ctx.fillStyle = k >= 1 && Math.floor(now / 110) % 2 === 0 ? '#ffffff' : '#38c8ff';
+  ctx.fillRect(x, y, Math.round(w * k), 3);
+}
+
 function drawHud(ctx: CanvasRenderingContext2D, snap: Snapshot, o: DrawOpts) {
   snap.sl.forEach((s, i) => {
     if (!s.a) return;
@@ -221,7 +420,12 @@ function drawHud(ctx: CanvasRenderingContext2D, snap: Snapshot, o: DrawOpts) {
     const name = DEFS[f?.d ?? ''] ? DEFS[f!.d].name : `P${i + 1}`;
     text(ctx, name + (i === o.mySlot ? ' ◀' : ''), x, 3);
     bar(ctx, x, 14, 70, f ? f.h : 0, f ? f.m : 1);
-    text(ctx, `x${Math.max(0, s.l)}  ${String(s.p).padStart(6, '0')}`, x, 22, '#ffd070');
+    energyBar(ctx, x, 21, 70, f ? f.e : 0, o.now);
+    text(ctx, `x${Math.max(0, s.l)}  ${String(s.p).padStart(6, '0')}`, x, 26, '#ffd070');
+    if (f && f.w) {
+      const wd = WEAPONS[f.w];
+      text(ctx, `${wd.name}${wd.uses < UNLIMITED ? ` ${f.n}` : ''}`, x, 35, '#bfe8ff');
+    }
   });
 
   const boss = snap.f.find((f) => DEFS[f.d]?.kind === 'boss' && f.s !== St.Dead);

@@ -20,6 +20,8 @@ export const St = {
   Dead: 18,
   HoldSwing: 19,
   Pick: 20,
+  Beam: 21,
+  Shoot: 22,
 } as const;
 
 export const ST_NAMES: string[] = [];
@@ -61,6 +63,11 @@ export interface Fighter {
   cd: number;
   aiT: number;
   lastSlot: number;
+  wn: number;
+  mp: number;
+  volley: number;
+  volleyCd: number;
+  cast: number;
 }
 
 export interface Item {
@@ -73,6 +80,18 @@ export interface Item {
   vy: number;
   vz: number;
   owner: number;
+  n: number;
+}
+
+export interface Shot {
+  id: number;
+  kind: number;
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  owner: number;
+  life: number;
 }
 
 export interface PlayerSlot {
@@ -92,6 +111,7 @@ export interface World {
   nextId: number;
   fighters: Fighter[];
   items: Item[];
+  shots: Shot[];
   ev: GameEvent[];
   cam: number;
   camMax: number;
@@ -120,6 +140,17 @@ export interface SnapFighter {
   m: number;
   w: number;
   v: number;
+  e: number;
+  n: number;
+  c: number;
+}
+
+export interface SnapShot {
+  k: number;
+  x: number;
+  y: number;
+  z: number;
+  r: 1 | -1;
 }
 
 export interface SnapItem {
@@ -147,5 +178,6 @@ export interface Snapshot {
   sl: SnapSlot[];
   f: SnapFighter[];
   it: SnapItem[];
+  sh: SnapShot[];
   ev: GameEvent[];
 }

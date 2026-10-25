@@ -154,6 +154,57 @@ input {
   background: rgba(255, 255, 255, 0.4);
   pointer-events: none;
 }
+#btnwrap {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+#specials {
+  display: flex;
+  gap: 10px;
+  min-height: min(56px, 14vw);
+  opacity: 0;
+  transform: translateY(16px) scale(0.7);
+  pointer-events: none;
+  transition: opacity 0.25s, transform 0.25s;
+}
+#specials.ready {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+#specials button {
+  flex: none;
+  width: min(56px, 14vw);
+  height: min(56px, 14vw);
+  border-radius: 50%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 35% 30%, #5ae8ff, #1a5aa8);
+  border-color: #fff;
+  box-shadow: 0 0 12px rgba(90, 230, 255, 0.9);
+  touch-action: none;
+}
+#specials.ready button {
+  animation: glow 0.9s ease-in-out infinite alternate;
+}
+#specials button svg {
+  width: 62%;
+  height: 62%;
+  pointer-events: none;
+}
+@keyframes glow {
+  from {
+    box-shadow: 0 0 6px rgba(90, 230, 255, 0.6);
+  }
+  to {
+    box-shadow: 0 0 18px rgba(255, 255, 255, 1);
+  }
+}
 #btns {
   display: flex;
   flex: none;

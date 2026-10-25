@@ -10,5 +10,20 @@ export const SNAPSHOT_EVERY = 2;
 export const GRAVITY = 0.2;
 export const JUMP_V = 3.4;
 
-export const Btn = { Up: 1, Down: 2, Left: 4, Right: 8, A: 16, B: 32 } as const;
-export const BTN_ALL = 63;
+export const Btn = {
+  Up: 1,
+  Down: 2,
+  Left: 4,
+  Right: 8,
+  A: 16,
+  B: 32,
+  S1: 64,
+  S2: 128,
+  S3: 256,
+  S4: 512,
+  S5: 1024,
+  S6: 2048,
+} as const;
+export const SPECIAL_BITS = [Btn.S1, Btn.S2, Btn.S3, Btn.S4, Btn.S5, Btn.S6];
+export const SPECIAL_MASK = Btn.S1 | Btn.S2 | Btn.S3 | Btn.S4 | Btn.S5 | Btn.S6;
+export const BTN_ALL = 4095;
