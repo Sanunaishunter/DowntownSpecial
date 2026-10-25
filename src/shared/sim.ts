@@ -861,9 +861,13 @@ function updateBeam(w: World, f: Fighter) {
   f.vy = 0;
   f.inv = Math.max(f.inv, 2);
   const fireT = f.t - BEAM.charge;
-  if (fireT >= BEAM.fire) {
+  if (fireT >= BEAM.fire + BEAM.recover) {
     f.mp = 0;
     setSt(f, St.Idle);
+    return;
+  }
+  if (fireT >= BEAM.fire) {
+    f.mp = 0;
     return;
   }
   if (fireT < 0) return;

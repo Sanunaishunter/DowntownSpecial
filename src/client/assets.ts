@@ -4,6 +4,7 @@ export interface AnimDef {
   frames: number[];
   ticks?: number[];
   loop?: boolean;
+  loopFrom?: number;
 }
 
 export interface SpriteDef {
@@ -23,6 +24,10 @@ function pickFrame(anim: number[] | AnimDef, t: number, fps: number): number | u
   if (!anim.ticks || anim.ticks.length !== frames.length) return frames[Math.floor((t / 60) * fps) % frames.length];
   const total = anim.ticks.reduce((a, b) => a + b, 0);
   let u = anim.loop ? t % total : Math.min(t, total - 1);
+  if (!anim.loop && anim.loopFrom !== undefined && t >= total) {
+    const start = anim.ticks.slice(0, anim.loopFrom).reduce((a, b) => a + b, 0);
+    u = start + ((t - start) % (total - start));
+  }
   for (let i = 0; i < frames.length; i++) {
     if (u < anim.ticks[i]) return frames[i];
     u -= anim.ticks[i];

@@ -35,6 +35,7 @@ FEET_BAND = 0.12
 #   erase_rock poses where a gray boulder must be removed
 #   flip       poses to mirror horizontally
 #   skip       poses that are cut but not used
+#   gain       brightness multiplier for a sheet that came out darker than the rest
 SHEETS = [
     dict(file="ronin-idle.jpg", grid=(1, 1), names=["idle"], ref="idle"),
     dict(file="sheet-move.jpg", grid=(3, 2), names=["walk1", "walk2", "walk3", "run1", "run2", "jump"], ref="walk2"),
@@ -45,6 +46,8 @@ SHEETS = [
          scale_from="sheet-weapon.png", main_only=True, erase_rock=["hold"], flip=["lying"]),
     dict(file="sheet-grab.png", grid=(3, 2), names=["grab", "lift", "carry1", "carry2", "windswing", "smash"],
          scale_from="sheet-weapon.png", main_only=True),
+    dict(file="sheet-special.jpg", grid=(3, 2), names=["charge1", "charge2", "fire1", "fire2", "recover", "cast"],
+         ref="recover", main_only=True, gain=1.12),
 ]
 
 # palette: name -> base colour; fringe entries collapse into the outline
@@ -97,6 +100,7 @@ BASE_FRAMES = [
     "hurt", "lying", "getup", "hold", "throw", "stomp",
     "idle_w", "swing1", "swing2", "swing3", "pick",
     "grab", "lift", "carry1", "carry2", "windswing", "smash",
+    "charge1", "charge2", "fire1", "fire2", "recover", "cast",
 ]
 # lower body from these frames is grafted under the upper body of idle_w (armed stance)
 ARMED = {"walk1_w": "walk1", "walk2_w": "walk2", "walk3_w": "walk3",
@@ -130,10 +134,13 @@ ANIMS = {
     "hold": (["carry1", "carry2"], [12, 12]),
     "holdswing": (["windswing", "smash", "carry1"], [6, 8, 10]),
     "stomp": (["windup", "stomp", "windup"], [4, 8, 8]),
-    "beam": (["throw"], [60]),
+    "beam": (["charge1", "charge2", "fire1", "fire2"], [12, 12, 6, 6]),
+    "beamend": (["recover"], [60]),
+    "cast": (["cast"], [60]),
     "shoot": (["windup", "punch", "windup"], [2, 6, 2]),
 }
 LOOPING = {"walk", "run", "walk_w", "run_w", "hold"}
+LOOP_FROM = {"beam": 2}  # after the last frame, repeat from this frame index
 
 
 def key_background(im: np.ndarray) -> np.ndarray:
@@ -362,6 +369,8 @@ def build_frames():
     for sh in SHEETS:
         fname, names = sh["file"], sh["names"]
         im = np.asarray(Image.open(SRC / fname).convert("RGB")).astype(np.int32)
+        if sh.get("gain"):
+            im = np.clip(im * sh["gain"], 0, 255).astype(np.int32)
         poses = split_poses(key_background(im), sh["grid"], names)
         missing = [n for n in names if not poses[n].any()]
         if missing:
@@ -411,6 +420,8 @@ def write_outputs(frames, preview):
         entry = {"frames": [FRAME_ORDER.index(p) for p in poses], "ticks": ticks}
         if anim in LOOPING:
             entry["loop"] = True
+        if anim in LOOP_FROM:
+            entry["loopFrom"] = LOOP_FROM[anim]
         anims[anim] = entry
     sheets = {}
     for char, overrides in RECOLOR.items():
