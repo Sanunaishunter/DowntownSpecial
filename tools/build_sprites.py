@@ -144,10 +144,6 @@ RECOLOR = {
         "cloth": (88, 168, 88), "cloth_dark": (52, 124, 60), "sash": (214, 180, 60),
         "pants": (64, 92, 76), "pants_dark": (38, 62, 50),
     },
-    "shiro": {
-        "cloth": (160, 92, 208), "cloth_dark": (108, 58, 162), "sash": (244, 212, 70),
-        "pants": (84, 58, 124), "pants_dark": (52, 36, 80),
-    },
 }
 
 BASE_FRAMES = [
@@ -615,10 +611,9 @@ def write_outputs(frames, preview):
             if g["muzzle"]:
                 manifest[char]["muzzle"] = muzzle_of(frames[g["muzzle"]])
     mpath = ROOT / "assets" / "manifest.json"
-    if mpath.exists():  # keep the background layers written by build_bg.py
-        old = json.loads(mpath.read_text())
-        if "_backdrop" in old:
-            manifest["_backdrop"] = old["_backdrop"]
+    if mpath.exists():  # keep entries written by build_bg.py / build_enemies.py
+        for k, v in json.loads(mpath.read_text()).items():
+            manifest.setdefault(k, v)
     mpath.write_text(json.dumps(manifest, indent=2) + "\n")
     print("wrote", OUT, "and assets/manifest.json")
     if preview:

@@ -15,7 +15,8 @@ export const DEFS: Record<string, Def> = {
   jiro: { name: '二郎', kind: 'player', hp: 120, walk: 0.9, run: 1.9, dmg: 1.15, score: 0 },
   saburo: { name: '三郎', kind: 'grunt', hp: 34, walk: 0.55, run: 1.6, dmg: 0.7, score: 100 },
   ninja: { name: '忍者', kind: 'grunt', hp: 28, walk: 0.8, run: 1.9, dmg: 0.8, score: 150 },
-  shiro: { name: '四郎', kind: 'boss', hp: 150, walk: 0.8, run: 2.2, dmg: 1.0, score: 1000 },
+  bushi: { name: '上層武士', kind: 'grunt', hp: 52, walk: 0.65, run: 1.7, dmg: 1.1, score: 250 },
+  shogun: { name: '大將軍', kind: 'boss', hp: 170, walk: 0.8, run: 2.2, dmg: 1.1, score: 1000 },
 };
 
 export const PLAYER_DEFS = ['ichiro', 'jiro'];

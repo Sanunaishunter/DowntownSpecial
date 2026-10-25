@@ -1670,563 +1670,6 @@
       -20
     ]
   },
-  "shiro": {
-    "image": "gen/shiro.png",
-    "w": 64,
-    "h": 56,
-    "ox": 28,
-    "oy": 52,
-    "anims": {
-      "idle": {
-        "frames": [
-          0
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "walk": {
-        "frames": [
-          1,
-          2,
-          3,
-          2
-        ],
-        "ticks": [
-          8,
-          8,
-          8,
-          8
-        ],
-        "loop": true
-      },
-      "run": {
-        "frames": [
-          4,
-          5
-        ],
-        "ticks": [
-          4,
-          4
-        ],
-        "loop": true
-      },
-      "jump": {
-        "frames": [
-          49,
-          50,
-          51
-        ],
-        "ticks": [
-          8,
-          14,
-          60
-        ]
-      },
-      "land": {
-        "frames": [
-          48
-        ],
-        "ticks": [
-          6
-        ]
-      },
-      "fly": {
-        "frames": [
-          52,
-          53
-        ],
-        "ticks": [
-          10,
-          60
-        ]
-      },
-      "punch": {
-        "frames": [
-          7,
-          8,
-          8,
-          7
-        ],
-        "ticks": [
-          2,
-          4,
-          3,
-          3
-        ]
-      },
-      "kick": {
-        "frames": [
-          7,
-          9,
-          9,
-          7
-        ],
-        "ticks": [
-          5,
-          5,
-          5,
-          5
-        ]
-      },
-      "airkick": {
-        "frames": [
-          10
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "dash": {
-        "frames": [
-          11
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "upper": {
-        "frames": [
-          12
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "hurt": {
-        "frames": [
-          13
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "down": {
-        "frames": [
-          14
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "dead": {
-        "frames": [
-          14
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "held": {
-        "frames": [
-          14
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "getup": {
-        "frames": [
-          15
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "pick": {
-        "frames": [
-          23
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "swing": {
-        "frames": [
-          20,
-          21,
-          22
-        ],
-        "ticks": [
-          5,
-          4,
-          13
-        ]
-      },
-      "throw": {
-        "frames": [
-          17
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "lift": {
-        "frames": [
-          24,
-          25,
-          26
-        ],
-        "ticks": [
-          5,
-          5,
-          4
-        ]
-      },
-      "hold": {
-        "frames": [
-          26,
-          27
-        ],
-        "ticks": [
-          12,
-          12
-        ],
-        "loop": true
-      },
-      "holdswing": {
-        "frames": [
-          28,
-          29,
-          26
-        ],
-        "ticks": [
-          6,
-          8,
-          10
-        ]
-      },
-      "stomp": {
-        "frames": [
-          7,
-          18,
-          7
-        ],
-        "ticks": [
-          4,
-          8,
-          8
-        ]
-      },
-      "beam": {
-        "frames": [
-          30,
-          31,
-          32,
-          33
-        ],
-        "ticks": [
-          12,
-          12,
-          6,
-          6
-        ],
-        "loopFrom": 2
-      },
-      "beamend": {
-        "frames": [
-          34
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "cast": {
-        "frames": [
-          35
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "shoot": {
-        "frames": [
-          7,
-          8,
-          7
-        ],
-        "ticks": [
-          2,
-          6,
-          2
-        ]
-      },
-      "idle_w": {
-        "frames": [
-          19
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "walk_w": {
-        "frames": [
-          54,
-          55,
-          56,
-          55
-        ],
-        "ticks": [
-          8,
-          8,
-          8,
-          8
-        ],
-        "loop": true
-      },
-      "run_w": {
-        "frames": [
-          57,
-          58
-        ],
-        "ticks": [
-          4,
-          4
-        ],
-        "loop": true
-      },
-      "jump_w": {
-        "frames": [
-          59
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "idle_w2": {
-        "frames": [
-          36
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "walk_w2": {
-        "frames": [
-          60,
-          61,
-          62,
-          61
-        ],
-        "ticks": [
-          8,
-          8,
-          8,
-          8
-        ],
-        "loop": true
-      },
-      "run_w2": {
-        "frames": [
-          63,
-          64
-        ],
-        "ticks": [
-          4,
-          4
-        ],
-        "loop": true
-      },
-      "jump_w2": {
-        "frames": [
-          65
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "idle_w3": {
-        "frames": [
-          42
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "walk_w3": {
-        "frames": [
-          66,
-          67,
-          68,
-          67
-        ],
-        "ticks": [
-          8,
-          8,
-          8,
-          8
-        ],
-        "loop": true
-      },
-      "run_w3": {
-        "frames": [
-          69,
-          70
-        ],
-        "ticks": [
-          4,
-          4
-        ],
-        "loop": true
-      },
-      "jump_w3": {
-        "frames": [
-          71
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "idle_w4": {
-        "frames": [
-          39
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "walk_w4": {
-        "frames": [
-          72,
-          73,
-          74,
-          73
-        ],
-        "ticks": [
-          8,
-          8,
-          8,
-          8
-        ],
-        "loop": true
-      },
-      "run_w4": {
-        "frames": [
-          75,
-          76
-        ],
-        "ticks": [
-          4,
-          4
-        ],
-        "loop": true
-      },
-      "jump_w4": {
-        "frames": [
-          77
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "idle_w5": {
-        "frames": [
-          45
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "walk_w5": {
-        "frames": [
-          78,
-          79,
-          80,
-          79
-        ],
-        "ticks": [
-          8,
-          8,
-          8,
-          8
-        ],
-        "loop": true
-      },
-      "run_w5": {
-        "frames": [
-          81,
-          82
-        ],
-        "ticks": [
-          4,
-          4
-        ],
-        "loop": true
-      },
-      "jump_w5": {
-        "frames": [
-          83
-        ],
-        "ticks": [
-          60
-        ]
-      },
-      "swing_w2": {
-        "frames": [
-          37,
-          38,
-          38
-        ],
-        "ticks": [
-          4,
-          4,
-          10
-        ]
-      },
-      "swing_w4": {
-        "frames": [
-          40,
-          41,
-          41
-        ],
-        "ticks": [
-          3,
-          5,
-          8
-        ]
-      },
-      "swing_w3": {
-        "frames": [
-          43,
-          44,
-          44
-        ],
-        "ticks": [
-          8,
-          4,
-          16
-        ]
-      },
-      "swing_w5": {
-        "frames": [
-          47,
-          47,
-          45
-        ],
-        "ticks": [
-          4,
-          3,
-          9
-        ]
-      },
-      "shoot_w5": {
-        "frames": [
-          45,
-          46,
-          45
-        ],
-        "ticks": [
-          2,
-          6,
-          2
-        ]
-      }
-    },
-    "muzzle": [
-      22,
-      -20
-    ]
-  },
   "ninja": {
     "image": "gen/ninja.png",
     "w": 64,
@@ -2376,6 +1819,254 @@
       "h": 96,
       "parallax": 1,
       "y": 128
+    }
+  },
+  "bushi": {
+    "image": "gen/bushi.png",
+    "w": 64,
+    "h": 56,
+    "ox": 28,
+    "oy": 52,
+    "anims": {
+      "idle": {
+        "frames": [
+          0
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk": {
+        "frames": [
+          1,
+          0,
+          2,
+          0
+        ],
+        "ticks": [
+          9,
+          6,
+          9,
+          6
+        ],
+        "loop": true
+      },
+      "run": {
+        "frames": [
+          3
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "dash": {
+        "frames": [
+          3
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "punch": {
+        "frames": [
+          4,
+          5,
+          6,
+          6
+        ],
+        "ticks": [
+          3,
+          3,
+          4,
+          2
+        ]
+      },
+      "kick": {
+        "frames": [
+          7,
+          4,
+          5,
+          6
+        ],
+        "ticks": [
+          5,
+          4,
+          5,
+          6
+        ]
+      },
+      "hurt": {
+        "frames": [
+          8
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "fly": {
+        "frames": [
+          9
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "down": {
+        "frames": [
+          10
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "dead": {
+        "frames": [
+          10
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "held": {
+        "frames": [
+          10
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "getup": {
+        "frames": [
+          11
+        ],
+        "ticks": [
+          60
+        ]
+      }
+    }
+  },
+  "shogun": {
+    "image": "gen/shogun.png",
+    "w": 88,
+    "h": 72,
+    "ox": 40,
+    "oy": 68,
+    "anims": {
+      "idle": {
+        "frames": [
+          0
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk": {
+        "frames": [
+          1,
+          0,
+          2,
+          0
+        ],
+        "ticks": [
+          10,
+          6,
+          10,
+          6
+        ],
+        "loop": true
+      },
+      "run": {
+        "frames": [
+          3
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "dash": {
+        "frames": [
+          3
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "punch": {
+        "frames": [
+          4,
+          5,
+          6,
+          6
+        ],
+        "ticks": [
+          4,
+          4,
+          4,
+          2
+        ]
+      },
+      "kick": {
+        "frames": [
+          7,
+          4,
+          5,
+          6
+        ],
+        "ticks": [
+          5,
+          4,
+          5,
+          6
+        ]
+      },
+      "hurt": {
+        "frames": [
+          8
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "fly": {
+        "frames": [
+          9
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "down": {
+        "frames": [
+          10
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "dead": {
+        "frames": [
+          10
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "held": {
+        "frames": [
+          10
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "getup": {
+        "frames": [
+          11
+        ],
+        "ticks": [
+          60
+        ]
+      }
     }
   }
 }
