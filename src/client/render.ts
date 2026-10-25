@@ -3,20 +3,7 @@ import { DEFS } from '../shared/defs';
 import { St, type GameEvent, type SnapFighter, type Snapshot } from '../shared/types';
 import bossData from '../../data/bosses.json';
 import type { Assets } from './assets';
-
-interface Pal {
-  coat: string;
-  trim: string;
-  hair: string;
-  skin: string;
-}
-
-const PAL: Record<string, Pal> = {
-  kunimasa: { coat: '#f4efe0', trim: '#2a4ea0', hair: '#1a1a1a', skin: '#f0c090' },
-  rikigoro: { coat: '#d83a3a', trim: '#5a1c1c', hair: '#1a1a1a', skin: '#e8b080' },
-  zako: { coat: '#4a8a4a', trim: '#22402a', hair: '#1a1a1a', skin: '#f0c090' },
-  ginpa: { coat: '#8a46b8', trim: '#3c1c58', hair: '#c8c8c8', skin: '#e8b890' },
-};
+import { PixelSprites } from './pixelart';
 
 const SIGNS = ['酒', '茶', '宿', '湯'];
 const BW = 112;
@@ -45,6 +32,7 @@ export class Renderer {
   private ctx: CanvasRenderingContext2D;
   private s = 2;
   private fx: Fx[] = [];
+  private sprites = new PixelSprites();
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -105,11 +93,7 @@ export class Renderer {
     ctx.save();
     ctx.translate(ox, oy - Math.round(f.z));
     ctx.scale(f.r, 1);
-    if (!this.assets.draw(ctx, f.d, f.s, f.t)) {
-      const boss = DEFS[f.d]?.kind === 'boss';
-      if (boss) ctx.scale(1.15, 1.15);
-      drawPlaceholder(ctx, PAL[f.d] ?? PAL.zako, f.s, f.t, f.w);
-    }
+    if (!this.assets.draw(ctx, f.d, f.s, f.t)) this.sprites.draw(ctx, f.d, f.s, f.t, f.w);
     ctx.restore();
   }
 }
@@ -120,97 +104,6 @@ function shadow(ctx: CanvasRenderingContext2D, x: number, y: number, z: number, 
   ctx.beginPath();
   ctx.ellipse(x, y, r, 3, 0, 0, Math.PI * 2);
   ctx.fill();
-}
-
-function drawPlaceholder(ctx: CanvasRenderingContext2D, pal: Pal, st: number, t: number, weapon: number) {
-  const R = (c: string, x: number, y: number, w: number, h: number) => {
-    ctx.fillStyle = c;
-    ctx.fillRect(x, y, w, h);
-  };
-  const lying = st === St.Down || st === St.Dead || st === St.Held;
-  ctx.save();
-  if (lying) {
-    ctx.translate(0, -6);
-    ctx.rotate(-Math.PI / 2);
-  }
-  if (st === St.Hurt) ctx.translate(-2, 0);
-  if (st === St.Dash) ctx.transform(1, 0, -0.18, 1, 0, 0);
-
-  const air = st === St.Jump || st === St.AirKick || st === St.Upper;
-  const moving = st === St.Walk || st === St.Run;
-  const ph = st === St.Walk ? (t >> 3) & 1 : st === St.Run || st === St.Dash ? (t >> 2) & 1 : 0;
-  const kicking = (st === St.Kick && t >= 4 && t <= 11) || st === St.AirKick;
-
-  if (air && !kicking) {
-    R(pal.trim, -5, -11, 4, 7);
-    R(pal.trim, 1, -9, 6, 5);
-  } else if (kicking) {
-    R(pal.trim, -5, -12, 4, 12);
-    R(pal.trim, 0, -18, 16, 4);
-    R('#222', 15, -20, 4, 7);
-  } else if (st === St.Stomp) {
-    R(pal.trim, -5, -12, 4, 12);
-    R(pal.trim, 0, -20, 8, 4);
-    R('#222', 6, t > 5 ? -8 : -21, 5, 4);
-  } else {
-    R(pal.trim, -5, -12 + (moving && ph ? 2 : 0), 4, 12 - (moving && ph ? 2 : 0));
-    R(pal.trim, 1, -12 + (moving && !ph ? 2 : 0), 4, 12 - (moving && !ph ? 2 : 0));
-    R('#222', -5, -2, 5, 2);
-    R('#222', 1, -2, 5, 2);
-  }
-
-  R(pal.coat, -6, -26, 12, 14);
-  R(pal.trim, -6, -16, 12, 3);
-
-  const armsUp = st === St.Lift || st === St.Hold || st === St.HoldSwing;
-  if (st === St.Punch) {
-    const ext = t >= 2 && t <= 6 ? 12 : 5;
-    R(pal.coat, 5, -24, ext, 4);
-    R(pal.skin, 5 + ext - 1, -25, 4, 6);
-  } else if (st === St.Dash) {
-    R(pal.coat, 5, -24, 10, 4);
-    R(pal.skin, 14, -25, 4, 6);
-  } else if (st === St.Upper) {
-    R(pal.coat, 5, -40, 4, 16);
-    R(pal.skin, 4, -45, 5, 5);
-  } else if (armsUp) {
-    const sw = st === St.HoldSwing ? Math.sin((t / 24) * Math.PI) * 6 : 0;
-    R(pal.coat, -6 + sw, -42, 3, 16);
-    R(pal.coat, 4 + sw, -42, 3, 16);
-    R(pal.skin, -6 + sw, -44, 3, 3);
-    R(pal.skin, 4 + sw, -44, 3, 3);
-  } else if (st === St.Throw) {
-    R(pal.coat, 5, -26, 12, 4);
-  } else if (st === St.Hurt) {
-    R(pal.coat, -9, -26, 3, 10);
-    R(pal.coat, 6, -22, 3, 10);
-  } else {
-    const sw = moving ? (ph ? 2 : -2) : 0;
-    R(pal.coat, -9, -25 + sw, 3, 10);
-    R(pal.coat, 6, -25 - sw, 3, 10);
-  }
-
-  const hx = st === St.Hurt ? -2 : 0;
-  R(pal.skin, -4 + hx, -35, 9, 9);
-  R(pal.hair, -4 + hx, -38, 9, 4);
-  R(pal.hair, -5 + hx, -35, 2, 6);
-  R(pal.hair, -1 + hx, -41, 4, 3);
-  R('#000', 2 + hx, -32, 2, 2);
-  if (st === St.Hurt || st === St.Down) R('#e03030', 0 + hx, -29, 4, 1);
-
-  if (weapon) {
-    if (st === St.Swing) {
-      const ang = -1.9 + Math.min(1, t / 9) * 2.5;
-      ctx.save();
-      ctx.translate(6, -24);
-      ctx.rotate(ang);
-      R('#8b5a2b', 0, -2, 26, 3);
-      ctx.restore();
-    } else {
-      R('#8b5a2b', 6, -36, 3, 24);
-    }
-  }
-  ctx.restore();
 }
 
 function drawSpark(ctx: CanvasRenderingContext2D, e: Fx, cam: number, k: number) {
