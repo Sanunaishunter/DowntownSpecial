@@ -29,8 +29,8 @@ export const STAGE: { width: number; waves: WaveDef[] } = {
       enemies: [
         { def: 'saburo', side: 1, y: 160 },
         { def: 'saburo', side: 1, y: 195, dx: 20 },
-        { def: 'saburo', side: -1, y: 175 },
-        { def: 'saburo', side: -1, y: 200, dx: 24 },
+        { def: 'ninja', side: -1, y: 175 },
+        { def: 'ninja', side: -1, y: 200, dx: 24 },
       ],
       items: [{ kind: 1, x: 400, y: 185 }],
     },
@@ -40,8 +40,8 @@ export const STAGE: { width: number; waves: WaveDef[] } = {
         { def: 'saburo', side: 1, y: 150 },
         { def: 'saburo', side: 1, y: 180, dx: 24 },
         { def: 'saburo', side: 1, y: 205, dx: 48 },
-        { def: 'saburo', side: -1, y: 170 },
-        { def: 'saburo', side: -1, y: 195, dx: 24 },
+        { def: 'ninja', side: -1, y: 170 },
+        { def: 'ninja', side: -1, y: 195, dx: 24 },
       ],
     },
     {
@@ -49,7 +49,7 @@ export const STAGE: { width: number; waves: WaveDef[] } = {
       enemies: [
         { def: 'saburo', side: 1, y: 160 },
         { def: 'saburo', side: 1, y: 200, dx: 30 },
-        { def: 'saburo', side: -1, y: 180 },
+        { def: 'ninja', side: -1, y: 180 },
       ],
       items: [{ kind: 1, x: 940, y: 170 }],
     },
@@ -57,8 +57,8 @@ export const STAGE: { width: number; waves: WaveDef[] } = {
       at: STAGE_W - 256,
       enemies: [
         { def: 'shiro', side: 1, y: 180 },
-        { def: 'saburo', side: 1, y: 155, dx: 40 },
-        { def: 'saburo', side: -1, y: 200 },
+        { def: 'ninja', side: 1, y: 155, dx: 40 },
+        { def: 'ninja', side: -1, y: 200 },
       ],
     },
   ],

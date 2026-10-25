@@ -2226,5 +2226,135 @@
       22,
       -20
     ]
+  },
+  "ninja": {
+    "image": "gen/ninja.png",
+    "w": 64,
+    "h": 56,
+    "ox": 28,
+    "oy": 52,
+    "anims": {
+      "idle": {
+        "frames": [
+          0
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk": {
+        "frames": [
+          1,
+          0,
+          2,
+          0
+        ],
+        "ticks": [
+          9,
+          6,
+          9,
+          6
+        ],
+        "loop": true
+      },
+      "run": {
+        "frames": [
+          10
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "dash": {
+        "frames": [
+          10
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "punch": {
+        "frames": [
+          3,
+          4,
+          4,
+          3
+        ],
+        "ticks": [
+          2,
+          4,
+          3,
+          3
+        ]
+      },
+      "kick": {
+        "frames": [
+          3,
+          5,
+          3
+        ],
+        "ticks": [
+          5,
+          10,
+          5
+        ]
+      },
+      "airkick": {
+        "frames": [
+          11
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "hurt": {
+        "frames": [
+          6
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "fly": {
+        "frames": [
+          7
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "down": {
+        "frames": [
+          8
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "dead": {
+        "frames": [
+          8
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "held": {
+        "frames": [
+          8
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "getup": {
+        "frames": [
+          9
+        ],
+        "ticks": [
+          60
+        ]
+      }
+    }
   }
 }

@@ -38,6 +38,7 @@ FEET_BAND = 0.12
 #   gain       brightness multiplier for a sheet that came out darker than the rest
 #   auto_gain  measure the skin tone and brighten/darken the sheet to match the others
 #   split      'components' cuts poses by connected shapes instead of empty gaps
+#   target_h   height in game pixels for the reference pose (default TARGET_H)
 #   center     poses anchored on the middle of their bounding box instead of their feet
 #   grow       how far (in 4px steps) components are expanded before grouping; 0 = exact shapes
 SHEETS = [
@@ -59,6 +60,10 @@ SHEETS = [
     dict(file="sheet-air.jpg", grid=(3, 2), names=["jcrouch", "jrise", "jpeak", "jfall", "kb1", "kb2"],
          scale_from="sheet-special.jpg", main_only=True, split="components", grow=0, auto_gain=True,
          center=["kb1", "kb2"]),
+    dict(file="ninja-a.jpg", grid=(3, 2), names=["n_idle", "n_walk1", "n_walk2", "n_wind", "n_punch", "n_kick"],
+         ref="n_idle", target_h=36, main_only=True, split="components", grow=0),
+    dict(file="ninja-b.jpg", grid=(3, 2), names=["n_hurt", "n_fly", "n_lying", "n_getup", "n_rush", "n_kick2"],
+         scale_from="ninja-a.jpg", main_only=True, split="components", grow=0, flip=["n_lying"], center=["n_fly"]),
 ]
 
 # palette: name -> base colour; fringe entries collapse into the outline
@@ -88,6 +93,15 @@ PALETTE = [
     ("metal_light", (100, 100, 112)),
     ("gunwood", (136, 82, 42)),
     ("gunwood_dark", (88, 52, 28)),
+    ("nj_body", (34, 41, 63)),
+    ("nj_body_dark", (15, 21, 34)),
+    ("nj_body_hi", (56, 62, 84)),
+    ("nj_red", (196, 20, 21)),
+    ("nj_red_dark", (132, 12, 14)),
+    ("nj_metal", (119, 122, 126)),
+    ("nj_metal_dark", (79, 78, 79)),
+    ("fringe7", (108, 31, 88)),
+    ("fringe8", (78, 7, 26)),
     ("fringe1", (111, 45, 91)),
     ("fringe2", (48, 20, 39)),
     ("fringe3", (27, 3, 10)),
@@ -110,7 +124,12 @@ ENTRY_SCOPE = {
     "gunwood": ["rready", "rfire", "rbash"],
     "gunwood_dark": ["rready", "rfire", "rbash"],
 }
-CANON = {k: "outline" for k in ("fringe1", "fringe2", "fringe3", "fringe4", "fringe5", "fringe6")}
+NINJA_POSES = ["n_idle", "n_walk1", "n_walk2", "n_wind", "n_punch", "n_kick", "n_hurt", "n_fly", "n_lying", "n_getup", "n_rush", "n_kick2"]
+for _n in ("nj_body", "nj_body_dark", "nj_body_hi", "nj_red", "nj_red_dark", "nj_metal", "nj_metal_dark"):
+    ENTRY_SCOPE[_n] = NINJA_POSES
+# The hero's own colours must not leak into the ninja poses.
+NINJA_EXCLUDE = {"cloth", "cloth_dark", "pants", "pants_dark", "sash", "sandal", "sandal_dark", "wood", "wood_dark", "red"}
+CANON = {k: "outline" for k in ("fringe1", "fringe2", "fringe3", "fringe4", "fringe5", "fringe6", "fringe7", "fringe8")}
 NAMES = [n for n, _ in PALETTE]
 PAL = np.array([c for _, c in PALETTE], dtype=np.int32)
 CANON_IDX = np.array([NAMES.index(CANON.get(n, n)) for n in NAMES])
@@ -330,7 +349,8 @@ def auto_gain(im: np.ndarray) -> np.ndarray:
 
 
 def nearest_palette(rgb: np.ndarray, pose=None) -> np.ndarray:
-    allowed = np.array([i for i, n in enumerate(NAMES) if n not in ENTRY_SCOPE or pose in ENTRY_SCOPE[n]])
+    allowed = np.array([i for i, n in enumerate(NAMES)
+                        if (n not in ENTRY_SCOPE or pose in ENTRY_SCOPE[n]) and not (pose in NINJA_POSES and n in NINJA_EXCLUDE)])
     pal = PAL[allowed]
     out = np.zeros(rgb.shape[:2], np.int32)
     for y0 in range(0, rgb.shape[0], 64):
@@ -499,7 +519,7 @@ def build_frames():
             sys.exit(f"{fname}: could not find poses {missing}")
         if "ref" in sh:
             ry, _ = np.nonzero(poses[sh["ref"]])
-            scales[fname] = (ry.max() + 1 - ry.min()) / TARGET_H
+            scales[fname] = (ry.max() + 1 - ry.min()) / sh.get("target_h", TARGET_H)
             print(f"{fname}: reference '{sh['ref']}' is {ry.max() + 1 - ry.min()}px tall -> scale {scales[fname]:.2f}")
         else:
             scales[fname] = scales[sh["scale_from"]]
@@ -544,38 +564,69 @@ def muzzle_of(frame: np.ndarray):
     return [int(xmax - AX + 1), int(round(float(rows.mean()))) - AY]
 
 
+# The ninja has its own frames and animations (enemies use far fewer states than the hero).
+NINJA_ORDER = ["n_idle", "n_walk1", "n_walk2", "n_wind", "n_punch", "n_kick", "n_hurt", "n_fly", "n_lying", "n_getup", "n_rush", "n_kick2"]
+NINJA_ANIMS = {
+    "idle": (["n_idle"], [60]),
+    "walk": (["n_walk1", "n_idle", "n_walk2", "n_idle"], [9, 6, 9, 6]),
+    "run": (["n_rush"], [60]),
+    "dash": (["n_rush"], [60]),
+    "punch": (["n_wind", "n_punch", "n_punch", "n_wind"], [2, 4, 3, 3]),
+    "kick": (["n_wind", "n_kick", "n_wind"], [5, 10, 5]),
+    "airkick": (["n_kick2"], [60]),
+    "hurt": (["n_hurt"], [60]),
+    "fly": (["n_fly"], [60]),
+    "down": (["n_lying"], [60]),
+    "dead": (["n_lying"], [60]),
+    "held": (["n_lying"], [60]),
+    "getup": (["n_getup"], [60]),
+}
+
+GROUPS = [
+    dict(order=FRAME_ORDER, anims=ANIMS, looping=LOOPING, loop_from=LOOP_FROM, chars=RECOLOR, muzzle="rfire"),
+    dict(order=NINJA_ORDER, anims=NINJA_ANIMS, looping={"walk"}, loop_from={}, chars={"ninja": {}}, muzzle=None),
+]
+
+
 def write_outputs(frames, preview):
     OUT.mkdir(parents=True, exist_ok=True)
     cols = 7
-    rows = (len(FRAME_ORDER) + cols - 1) // cols
     manifest = {}
-    anims = {}
-    for anim, (poses, ticks) in ANIMS.items():
-        entry = {"frames": [FRAME_ORDER.index(p) for p in poses], "ticks": ticks}
-        if anim in LOOPING:
-            entry["loop"] = True
-        if anim in LOOP_FROM:
-            entry["loopFrom"] = LOOP_FROM[anim]
-        anims[anim] = entry
     sheets = {}
-    for char, overrides in RECOLOR.items():
-        sheet = np.zeros((rows * CELL_H, cols * CELL_W, 4), np.uint8)
-        for i, name in enumerate(FRAME_ORDER):
-            r, c = divmod(i, cols)
-            sheet[r * CELL_H:(r + 1) * CELL_H, c * CELL_W:(c + 1) * CELL_W] = colorize(frames[name], overrides)
-        Image.fromarray(sheet, "RGBA").save(OUT / f"{char}.png")
-        sheets[char] = sheet
-        manifest[char] = {"image": f"gen/{char}.png", "w": CELL_W, "h": CELL_H, "ox": AX, "oy": AY, "anims": anims,
-                          "muzzle": muzzle_of(frames["rfire"])}
+    for g in GROUPS:
+        order = g["order"]
+        rows = (len(order) + cols - 1) // cols
+        anims = {}
+        for anim, (poses, ticks) in g["anims"].items():
+            entry = {"frames": [order.index(p) for p in poses], "ticks": ticks}
+            if anim in g["looping"]:
+                entry["loop"] = True
+            if anim in g["loop_from"]:
+                entry["loopFrom"] = g["loop_from"][anim]
+            anims[anim] = entry
+        for char, overrides in g["chars"].items():
+            sheet = np.zeros((rows * CELL_H, cols * CELL_W, 4), np.uint8)
+            for i, name in enumerate(order):
+                r, c = divmod(i, cols)
+                sheet[r * CELL_H:(r + 1) * CELL_H, c * CELL_W:(c + 1) * CELL_W] = colorize(frames[name], overrides)
+            Image.fromarray(sheet, "RGBA").save(OUT / f"{char}.png")
+            sheets[char] = sheet
+            manifest[char] = {"image": f"gen/{char}.png", "w": CELL_W, "h": CELL_H, "ox": AX, "oy": AY, "anims": anims}
+            if g["muzzle"]:
+                manifest[char]["muzzle"] = muzzle_of(frames[g["muzzle"]])
     (ROOT / "assets" / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print("wrote", OUT, "and assets/manifest.json")
     if preview:
         k = 4
         w = cols * CELL_W * k
-        sheet_img = Image.new("RGBA", (w, rows * CELL_H * k * len(RECOLOR)), (217, 154, 58, 255))
-        for n, char in enumerate(RECOLOR):
-            big = Image.fromarray(sheets[char], "RGBA").resize((cols * CELL_W * k, rows * CELL_H * k), Image.NEAREST)
-            sheet_img.alpha_composite(big, (0, n * rows * CELL_H * k))
+        order_chars = list(sheets)
+        heights = [sheets[c].shape[0] * k for c in order_chars]
+        sheet_img = Image.new("RGBA", (w, sum(heights)), (217, 154, 58, 255))
+        y = 0
+        for c, h in zip(order_chars, heights):
+            big = Image.fromarray(sheets[c], "RGBA").resize((sheets[c].shape[1] * k, h), Image.NEAREST)
+            sheet_img.alpha_composite(big, (0, y))
+            y += h
         sheet_img.convert("RGB").save(preview)
         print("preview", preview)
 
