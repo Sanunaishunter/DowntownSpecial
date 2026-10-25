@@ -43,6 +43,8 @@ SHEETS = [
          ref="idle_w", main_only=True, skip=["throwstick"]),
     dict(file="sheet-hurt.png", grid=(3, 2), names=["hurt", "lying", "getup", "hold", "throw", "stomp"],
          scale_from="sheet-weapon.png", main_only=True, erase_rock=["hold"], flip=["lying"]),
+    dict(file="sheet-grab.png", grid=(3, 2), names=["grab", "lift", "carry1", "carry2", "windswing", "smash"],
+         scale_from="sheet-weapon.png", main_only=True),
 ]
 
 # palette: name -> base colour; fringe entries collapse into the outline
@@ -94,6 +96,7 @@ BASE_FRAMES = [
     "windup", "punch", "kick", "flykick", "dash", "upper",
     "hurt", "lying", "getup", "hold", "throw", "stomp",
     "idle_w", "swing1", "swing2", "swing3", "pick",
+    "grab", "lift", "carry1", "carry2", "windswing", "smash",
 ]
 # lower body from these frames is grafted under the upper body of idle_w (armed stance)
 ARMED = {"walk1_w": "walk1", "walk2_w": "walk2", "walk3_w": "walk3",
@@ -123,14 +126,14 @@ ANIMS = {
     "pick": (["pick"], [60]),
     "swing": (["swing1", "swing2", "swing3"], [5, 4, 13]),
     "throw": (["throw"], [60]),
-    "lift": (["hold"], [60]),
-    "hold": (["hold"], [60]),
-    "holdswing": (["hold"], [60]),
+    "lift": (["grab", "lift", "carry1"], [5, 5, 4]),
+    "hold": (["carry1", "carry2"], [12, 12]),
+    "holdswing": (["windswing", "smash", "carry1"], [6, 8, 10]),
     "stomp": (["windup", "stomp", "windup"], [4, 8, 8]),
     "beam": (["throw"], [60]),
     "shoot": (["windup", "punch", "windup"], [2, 6, 2]),
 }
-LOOPING = {"walk", "run", "walk_w", "run_w"}
+LOOPING = {"walk", "run", "walk_w", "run_w", "hold"}
 
 
 def key_background(im: np.ndarray) -> np.ndarray:
