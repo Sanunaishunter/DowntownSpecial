@@ -614,7 +614,12 @@ def write_outputs(frames, preview):
             manifest[char] = {"image": f"gen/{char}.png", "w": CELL_W, "h": CELL_H, "ox": AX, "oy": AY, "anims": anims}
             if g["muzzle"]:
                 manifest[char]["muzzle"] = muzzle_of(frames[g["muzzle"]])
-    (ROOT / "assets" / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    mpath = ROOT / "assets" / "manifest.json"
+    if mpath.exists():  # keep the background layers written by build_bg.py
+        old = json.loads(mpath.read_text())
+        if "_backdrop" in old:
+            manifest["_backdrop"] = old["_backdrop"]
+    mpath.write_text(json.dumps(manifest, indent=2) + "\n")
     print("wrote", OUT, "and assets/manifest.json")
     if preview:
         k = 4

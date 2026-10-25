@@ -56,7 +56,7 @@ export class Renderer {
     ctx.setTransform(this.s, 0, 0, this.s, 0, 0);
     ctx.imageSmoothingEnabled = false;
     const cam = snap ? snap.c : 0;
-    drawBackground(ctx, cam);
+    if (!this.assets.drawBackdrop(ctx, cam, SCREEN_W)) drawBackground(ctx, cam);
     if (!snap) return;
 
     for (const it of snap.it) drawItem(ctx, it, cam);

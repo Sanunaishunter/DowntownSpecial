@@ -2356,5 +2356,26 @@
         ]
       }
     }
+  },
+  "_backdrop": {
+    "sky": {
+      "image": "gen/bg_sky.png",
+      "w": 360,
+      "h": 128,
+      "parallax": 0.1
+    },
+    "mid": {
+      "image": "gen/bg_mid.png",
+      "w": 780,
+      "h": 134,
+      "parallax": 0.5
+    },
+    "road": {
+      "image": "gen/bg_road.png",
+      "w": 158,
+      "h": 96,
+      "parallax": 1,
+      "y": 128
+    }
   }
 }

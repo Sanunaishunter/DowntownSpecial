@@ -36,6 +36,14 @@ function pickFrame(anim: number[] | AnimDef, t: number, fps: number): number | u
   return frames[frames.length - 1];
 }
 
+interface BackdropLayer {
+  image: string;
+  w: number;
+  h: number;
+  parallax: number;
+  y?: number;
+}
+
 interface Loaded {
   def: SpriteDef;
   img: HTMLImageElement;
@@ -44,12 +52,14 @@ interface Loaded {
 
 export class Assets {
   private sheets = new Map<string, Loaded>();
+  private layers: { def: BackdropLayer; img: HTMLImageElement }[] = [];
 
   async load() {
     try {
       const r = await fetch('/assets/manifest.json', { cache: 'no-cache' });
       if (!r.ok) return;
       const manifest = (await r.json()) as Record<string, SpriteDef>;
+      const backdrop = (manifest as unknown as Record<string, Record<string, BackdropLayer> | undefined>)._backdrop;
       await Promise.all(
         Object.entries(manifest).map(async ([name, def]) => {
           if (!def || typeof def.image !== 'string' || !def.anims) return;
@@ -63,9 +73,42 @@ export class Assets {
           this.sheets.set(name, { def, img, cols: Math.max(1, Math.floor(img.width / def.w)) });
         }),
       );
+      if (backdrop) await this.loadBackdrop(backdrop);
     } catch {
       /* no custom art: placeholders are used */
     }
+  }
+
+  private async loadBackdrop(b: Record<string, BackdropLayer>) {
+    const layers: { def: BackdropLayer; img: HTMLImageElement }[] = [];
+    for (const key of ['sky', 'mid', 'road']) {
+      const def = b[key];
+      if (!def || typeof def.image !== 'string') return;
+      const img = new Image();
+      img.src = `/assets/${def.image}`;
+      try {
+        await img.decode();
+      } catch {
+        return;
+      }
+      layers.push({ def, img });
+    }
+    this.layers = layers;
+  }
+
+  /** Draws sky / middle / road layers; returns false when there are no background images. */
+  drawBackdrop(ctx: CanvasRenderingContext2D, cam: number, width: number): boolean {
+    if (!this.layers.length) return false;
+    ctx.imageSmoothingEnabled = false;
+    for (const { def, img } of this.layers) {
+      const y = def.y ?? 0;
+      if (def.parallax >= 1) {
+        for (let x = -(Math.round(cam) % def.w); x < width; x += def.w) ctx.drawImage(img, x, y);
+      } else {
+        ctx.drawImage(img, -Math.round(cam * def.parallax), y);
+      }
+    }
+    return true;
   }
 
   get count() {
