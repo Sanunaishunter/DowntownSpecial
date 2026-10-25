@@ -1,7 +1,6 @@
 import { SCREEN_H, SCREEN_W } from '../shared/constants';
 import { DEFS } from '../shared/defs';
 import { St, type GameEvent, type SnapFighter, type Snapshot } from '../shared/types';
-import bossData from '../../data/bosses.json';
 import type { Assets } from './assets';
 import { PixelSprites } from './pixelart';
 
@@ -21,11 +20,6 @@ export interface DrawOpts {
   mySlot: number;
   hint: string;
   now: number;
-}
-
-export function bossName(def: string): string {
-  const b = bossData.bosses.find((x) => x.id === def);
-  return b ? b.zh : (DEFS[def]?.name ?? def);
 }
 
 export class Renderer {
@@ -86,7 +80,7 @@ export class Renderer {
     const ctx = this.ctx;
     const dead = f.s === St.Dead;
     if (f.v > 0 && Math.floor(now / 70) % 2 === 0) return;
-    if (dead && f.d !== 'kunimasa' && f.d !== 'rikigoro' && Math.floor(now / 90) % 2 === 0) return;
+    if (dead && DEFS[f.d]?.kind !== 'player' && Math.floor(now / 90) % 2 === 0) return;
     const ox = Math.round(f.x - cam);
     const oy = Math.round(f.y);
     shadow(ctx, ox, oy, f.z, f.s === St.Down || dead || f.s === St.Held ? 14 : 9);
@@ -232,7 +226,7 @@ function drawHud(ctx: CanvasRenderingContext2D, snap: Snapshot, o: DrawOpts) {
 
   const boss = snap.f.find((f) => DEFS[f.d]?.kind === 'boss' && f.s !== St.Dead);
   if (boss) {
-    text(ctx, bossName(boss.d), SCREEN_W / 2, 3, '#ff9090', 'center');
+    text(ctx, DEFS[boss.d].name, SCREEN_W / 2, 3, '#ff9090', 'center');
     bar(ctx, SCREEN_W / 2 - 40, 14, 80, boss.h, boss.m);
   }
 

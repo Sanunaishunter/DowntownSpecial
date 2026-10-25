@@ -109,11 +109,11 @@ describe('websocket', () => {
     expect(joinedB.slot).toBe(1);
 
     const snap = await b.waitFor((m) => m.t === 's' && m.sl[0].a === 1 && m.sl[1].a === 1);
-    expect(snap.f.filter((f: any) => f.d === 'kunimasa' || f.d === 'rikigoro').length).toBe(2);
+    expect(snap.f.filter((f: any) => f.d === 'ichiro' || f.d === 'jiro').length).toBe(2);
 
-    const x0 = (await a.waitFor((m) => m.t === 's')).f.find((f: any) => f.d === 'kunimasa').x;
+    const x0 = (await a.waitFor((m) => m.t === 's')).f.find((f: any) => f.d === 'ichiro').x;
     a.ws.send(JSON.stringify({ t: 'in', h: Btn.Left | Btn.Up, p: 0 }));
-    await a.waitFor((m) => m.t === 's' && m.f.find((f: any) => f.d === 'kunimasa' && f.x < x0 - 8));
+    await a.waitFor((m) => m.t === 's' && m.f.find((f: any) => f.d === 'ichiro' && f.x < x0 - 8));
     a.ws.send(JSON.stringify({ t: 'in', h: 0, p: 0 }));
 
     const c = connect();

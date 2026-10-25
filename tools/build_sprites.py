@@ -74,16 +74,16 @@ PAL = np.array([c for _, c in PALETTE], dtype=np.int32)
 CANON_IDX = np.array([NAMES.index(CANON.get(n, n)) for n in NAMES])
 
 RECOLOR = {
-    "kunimasa": {},
-    "rikigoro": {
+    "ichiro": {},
+    "jiro": {
         "cloth": (200, 72, 72), "cloth_dark": (142, 46, 56), "sash": (236, 208, 80),
         "pants": (112, 74, 52), "pants_dark": (70, 46, 34),
     },
-    "zako": {
+    "saburo": {
         "cloth": (88, 168, 88), "cloth_dark": (52, 124, 60), "sash": (214, 180, 60),
         "pants": (64, 92, 76), "pants_dark": (38, 62, 50),
     },
-    "ginpa": {
+    "shiro": {
         "cloth": (160, 92, 208), "cloth_dark": (108, 58, 162), "sash": (244, 212, 70),
         "pants": (84, 58, 124), "pants_dark": (52, 36, 80),
     },

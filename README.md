@@ -2,7 +2,7 @@
 
 江戶時代風格的網頁動作遊戲（紅白機像素風），兩人透過 Tailscale 連線合作。
 
-目前內容：一個關卡（街道，5 波敵人，最後首領銀八）、雙人合作、鍵盤與手機觸控。
+目前內容：一個關卡（街道，5 波敵人，最後首領四郎）、雙人合作、鍵盤與手機觸控。
 
 ## 啟動（在當伺服器的電腦上）
 
@@ -85,7 +85,7 @@ python3 tools/build_sprites.py --preview preview.png
 
 在 `assets/` 放圖並寫好 `manifest.json`（格式見 `assets/manifest.example.json`）。每個角色是一張格狀圖：`w`/`h` 是單格大小，`ox`/`oy` 是腳底中心在格內的位置，`anims` 把狀態名對應到格子編號（由左到右、由上到下，從 0 起算）。動作可寫成 `{"frames": [..], "ticks": [..], "loop": true}` 指定每格停留的遊戲刻數（60 刻 = 1 秒），或直接寫格子編號陣列。
 
-- 角色代號：`kunimasa`、`rikigoro`、`zako`、`ginpa`。
+- 角色代號：`ichiro`（一郎，主角）、`jiro`（二郎，P2）、`saburo`（三郎，雜兵）、`shiro`（四郎，首領）。
 - 可用狀態名：`idle walk run jump punch kick airkick dash upper hurt down getup swing throw lift hold held stomp dead pick holdswing`。缺少的狀態會退回 `idle`。
 - 重新整理頁面即可，不用重新建置。
 - `assets/` 內除了 `manifest.json` 與 `gen/` 以外的檔案不會被 git 上傳；不是自己創作的素材請只供私下使用，不要公開散布。

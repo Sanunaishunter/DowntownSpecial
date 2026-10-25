@@ -1,6 +1,6 @@
 {
-  "kunimasa": {
-    "image": "gen/kunimasa.png",
+  "ichiro": {
+    "image": "gen/ichiro.png",
     "w": 64,
     "h": 56,
     "ox": 28,
@@ -248,8 +248,8 @@
       }
     }
   },
-  "rikigoro": {
-    "image": "gen/rikigoro.png",
+  "jiro": {
+    "image": "gen/jiro.png",
     "w": 64,
     "h": 56,
     "ox": 28,
@@ -497,8 +497,8 @@
       }
     }
   },
-  "zako": {
-    "image": "gen/zako.png",
+  "saburo": {
+    "image": "gen/saburo.png",
     "w": 64,
     "h": 56,
     "ox": 28,
@@ -746,8 +746,8 @@
       }
     }
   },
-  "ginpa": {
-    "image": "gen/ginpa.png",
+  "shiro": {
+    "image": "gen/shiro.png",
     "w": 64,
     "h": 56,
     "ox": 28,

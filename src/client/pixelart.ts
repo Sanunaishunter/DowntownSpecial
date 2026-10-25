@@ -8,22 +8,22 @@ export const ANCHOR_Y = 36;
 type Grid = string[][];
 
 const PALETTES: Record<string, Record<string, string>> = {
-  kunimasa: {
+  ichiro: {
     H: '#202028', h: '#505068', S: '#f8c898', s: '#d09060', C: '#f8f8f0', c: '#b8c0d8', L: '#8090c0',
     B: '#2848b0', b: '#182c78', T: '#3858c8', t: '#24409a', F: '#6a4428', f: '#3e2614',
     E: '#101018', M: '#a03030', K: '#c88840', k: '#80501c', O: '#101018',
   },
-  rikigoro: {
+  jiro: {
     H: '#202028', h: '#505068', S: '#f0b888', s: '#c88050', C: '#e04848', c: '#a02828', L: '#f8d0c0',
     B: '#f0d040', b: '#b08820', T: '#484860', t: '#2c2c40', F: '#6a4428', f: '#3e2614',
     E: '#101018', M: '#a03030', K: '#c88840', k: '#80501c', O: '#101018',
   },
-  zako: {
+  saburo: {
     H: '#181820', h: '#40405a', S: '#f0c090', s: '#c88c58', C: '#58a858', c: '#347c3c', L: '#c8f0c0',
     B: '#d0b038', b: '#8c7418', T: '#3c5848', t: '#243c30', F: '#5a3a20', f: '#34200c',
     E: '#101018', M: '#a03030', K: '#c88840', k: '#80501c', O: '#101018',
   },
-  ginpa: {
+  shiro: {
     H: '#d8d8e0', h: '#ffffff', S: '#e8b890', s: '#b88058', C: '#9c58cc', c: '#6a38a0', L: '#e0c0f8',
     B: '#f0d040', b: '#b08820', T: '#503878', t: '#32224e', F: '#5a3a20', f: '#34200c',
     E: '#101018', M: '#a03030', K: '#c88840', k: '#80501c', O: '#101018',
@@ -512,7 +512,7 @@ export class PixelSprites {
     if (!cv) {
       const g = buildPose(pose, frame, weapon);
       outline(g);
-      cv = toCanvas(g, PALETTES[def] ?? PALETTES.zako);
+      cv = toCanvas(g, PALETTES[def] ?? PALETTES.saburo);
       this.cache.set(key, cv);
     }
     return cv;

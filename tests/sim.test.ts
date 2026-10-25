@@ -29,7 +29,7 @@ function spawnGrunt(w: World, dx: number, dy = 0) {
     ...p,
     id: w.nextId++,
     kind: 'grunt',
-    def: 'zako',
+    def: 'saburo',
     slot: -1,
     x: p.x + dx,
     y: p.y + dy,
