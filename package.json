@@ -1,9 +1,9 @@
 {
-  "name": "downtown-special",
+  "name": "edo-brawl",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "熱血時代劇風格的網頁雙人合作動作遊戲（私人專案）",
+  "description": "江戶大亂鬥：紅白機風格的網頁雙人合作動作遊戲",
   "scripts": {
     "dev:server": "tsx watch src/server/main.ts",
     "dev:client": "vite",

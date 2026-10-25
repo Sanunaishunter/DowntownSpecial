@@ -17,7 +17,7 @@ const server = await startServer({
 });
 
 console.log('');
-console.log('熱血時代劇 伺服器已啟動。朋友請用 Tailscale 位址開啟：');
+console.log('江戶大亂鬥 伺服器已啟動。朋友請用 Tailscale 位址開啟：');
 for (const h of hosts) console.log(`  http://${h}:${server.ports[0]}/`);
 console.log('');
 
