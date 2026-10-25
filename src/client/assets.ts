@@ -90,7 +90,7 @@ export class Assets {
     if (!s) return 0;
     const name = animName ?? ST_NAMES[st] ?? 'idle';
     const suffix = weapon === 1 ? '_w' : weapon > 1 ? `_w${weapon}` : '';
-    const armed = suffix ? s.def.anims[`${name}${suffix}`] : undefined;
+    const armed = suffix ? (s.def.anims[`${name}${suffix}`] ?? (name === 'land' ? s.def.anims[`idle${suffix}`] : undefined)) : undefined;
     const anim = armed ?? s.def.anims[name] ?? s.def.anims.idle;
     if (!anim) return 0;
     const idx = pickFrame(anim, t, s.def.fps ?? 8);

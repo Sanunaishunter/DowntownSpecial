@@ -22,6 +22,7 @@ export const St = {
   Pick: 20,
   Beam: 21,
   Shoot: 22,
+  Land: 23,
 } as const;
 
 export const ST_NAMES: string[] = [];

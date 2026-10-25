@@ -105,6 +105,7 @@ function shadow(ctx: CanvasRenderingContext2D, x: number, y: number, z: number, 
 // Which sheet animation to use for a fighter. The stick has its own armed poses baked in;
 // other weapons reuse unarmed poses and are drawn on top.
 function artFor(f: SnapFighter, hasArt: boolean): { weapon: number; anim?: string; t: number } {
+  if (f.s === St.Down && f.z > 0) return { weapon: 0, anim: 'fly', t: f.t };
   if (f.s === St.Beam) return { weapon: 0, anim: f.t >= BEAM.charge + BEAM.fire ? 'beamend' : 'beam', t: f.t };
   if ((f.s === St.Idle || f.s === St.Walk || f.s === St.Run) && f.c > 0) return { weapon: 0, anim: 'cast', t: 0 };
   if (!f.w) return { weapon: 0, t: f.t };

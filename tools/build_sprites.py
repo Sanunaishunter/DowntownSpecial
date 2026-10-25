@@ -38,6 +38,7 @@ FEET_BAND = 0.12
 #   gain       brightness multiplier for a sheet that came out darker than the rest
 #   auto_gain  measure the skin tone and brighten/darken the sheet to match the others
 #   split      'components' cuts poses by connected shapes instead of empty gaps
+#   center     poses anchored on the middle of their bounding box instead of their feet
 #   grow       how far (in 4px steps) components are expanded before grouping; 0 = exact shapes
 SHEETS = [
     dict(file="ronin-idle.jpg", grid=(1, 1), names=["idle"], ref="idle"),
@@ -55,6 +56,9 @@ SHEETS = [
          scale_from="sheet-special.jpg", main_only=True, split="components", grow=0, auto_gain=True),
     dict(file="sheet-heavy.jpg", grid=(3, 2), names=["stcarry", "stwind", "stsmash", "rready", "rfire", "rbash"],
          scale_from="sheet-special.jpg", main_only=True, split="components", grow=0, auto_gain=True),
+    dict(file="sheet-air.jpg", grid=(3, 2), names=["jcrouch", "jrise", "jpeak", "jfall", "kb1", "kb2"],
+         scale_from="sheet-special.jpg", main_only=True, split="components", grow=0, auto_gain=True,
+         center=["kb1", "kb2"]),
 ]
 
 # palette: name -> base colour; fringe entries collapse into the outline
@@ -136,6 +140,7 @@ BASE_FRAMES = [
     "charge1", "charge2", "fire1", "fire2", "recover", "cast",
     "bready", "bwind", "bstrike", "sready", "swind", "sstrike",
     "stcarry", "stwind", "stsmash", "rready", "rfire", "rbash",
+    "jcrouch", "jrise", "jpeak", "jfall", "kb1", "kb2",
 ]
 # Armed stances per weapon suffix: the upper body of the "ready" frame is grafted onto
 # the legs of each locomotion frame. _w = stick, _w2 = bamboo sword, _w4 = energy sword.
@@ -149,7 +154,9 @@ ANIMS = {
     "idle": (["idle"], [60]),
     "walk": (["walk1", "walk2", "walk3", "walk2"], [8, 8, 8, 8]),
     "run": (["run1", "run2"], [4, 4]),
-    "jump": (["jump"], [60]),
+    "jump": (["jrise", "jpeak", "jfall"], [8, 14, 60]),
+    "land": (["jcrouch"], [6]),
+    "fly": (["kb1", "kb2"], [10, 60]),
     "punch": (["windup", "punch", "punch", "windup"], [2, 4, 3, 3]),
     "kick": (["windup", "kick", "kick", "windup"], [5, 5, 5, 5]),
     "airkick": (["flykick"], [60]),
@@ -317,7 +324,7 @@ def auto_gain(im: np.ndarray) -> np.ndarray:
     skin = (r > 150) & (r - b > 60) & (g > 90) & (r > g) & (g > b) & (r - g > 25) & (r - g < 90)
     sel = im[skin]
     top = sel[sel.sum(1) >= np.percentile(sel.sum(1), 50)]
-    gain = float(np.clip((SKIN_TARGET / np.median(top, 0)).mean(), 0.85, 1.25))
+    gain = float(np.clip((SKIN_TARGET / np.median(top, 0)).mean(), 0.85, 1.45))
     print(f"  auto gain {gain:.2f}")
     return np.clip(im * gain, 0, 255).astype(np.int32)
 
@@ -386,7 +393,7 @@ def erase_rock(rgb: np.ndarray, mask: np.ndarray) -> np.ndarray:
     return out
 
 
-def shrink(rgb, mask, scale, flip=False, pose=None):
+def shrink(rgb, mask, scale, flip=False, pose=None, center=False):
     """Return CELL_H x CELL_W index frame (-1 = transparent)."""
     ys, xs = np.nonzero(mask)
     x0, x1, y0, y1 = xs.min(), xs.max() + 1, ys.min(), ys.max() + 1
@@ -398,7 +405,7 @@ def shrink(rgb, mask, scale, flip=False, pose=None):
     ys, xs = np.nonzero(m)
     bottom = ys.max() + 1
     band = ys >= bottom - max(4, int((bottom - ys.min()) * FEET_BAND))
-    ax = (xs[band].min() + xs[band].max() + 1) / 2
+    ax = (xs.min() + xs.max() + 1) / 2 if center else (xs[band].min() + xs[band].max() + 1) / 2
     idx = nearest_palette(sub_rgb, pose)
     frame = np.full((CELL_H, CELL_W), -1, np.int32)
     for ty in range(CELL_H):
@@ -505,7 +512,7 @@ def build_frames():
                 m = erase_rock(im, m)
             if sh.get("main_only"):
                 m = keep_main(m)
-            frame = shrink(im, m, scales[fname], name in sh.get("flip", []), name)
+            frame = shrink(im, m, scales[fname], name in sh.get("flip", []), name, name in sh.get("center", []))
             if name in FIXUPS:
                 frame = FIXUPS[name](frame)
             frames[name] = auto_outline(drop_small(tidy(frame)))

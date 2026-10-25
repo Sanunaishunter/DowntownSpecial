@@ -185,7 +185,7 @@ function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
   if (f.inv > 0) f.inv--;
   if (f.tapT > 0) f.tapT--;
 
-  const act = f.st === St.Idle || f.st === St.Walk || f.st === St.Run || f.st === St.Jump || f.st === St.Hold;
+  const act = f.st === St.Idle || f.st === St.Walk || f.st === St.Run || f.st === St.Jump || f.st === St.Hold || f.st === St.Land;
   const dx = (held & Btn.Right ? 1 : 0) - (held & Btn.Left ? 1 : 0);
   const dy = (held & Btn.Down ? 1 : 0) - (held & Btn.Up ? 1 : 0);
 
@@ -217,14 +217,14 @@ function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
       }
     }
 
-    if (f.st === St.Idle || f.st === St.Walk) {
+    if (f.st === St.Idle || f.st === St.Walk || f.st === St.Land) {
       if (dx || dy) {
         f.st = St.Walk;
         f.vx = dx * d.walk;
         f.vy = dy * d.walk * 0.7;
         if (dx) f.face = dx > 0 ? 1 : -1;
       } else {
-        f.st = St.Idle;
+        if (f.st !== St.Land) f.st = St.Idle;
         f.vx = 0;
         f.vy = 0;
       }
@@ -263,7 +263,7 @@ function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
   }
   if (f.cast > 0) f.cast--;
   if (f.volley > 0) tickVolley(w, f);
-  if ((pressed & SPECIAL_MASK) && f.mp >= MP_MAX && f.volley === 0 && (f.st === St.Idle || f.st === St.Walk || f.st === St.Run)) {
+  if ((pressed & SPECIAL_MASK) && f.mp >= MP_MAX && f.volley === 0 && (f.st === St.Idle || f.st === St.Walk || f.st === St.Run || f.st === St.Land)) {
     startSpecial(f, pressed);
   }
   if (f.st === St.Shoot && f.t >= 9 && held & Btn.A && !(held & Btn.B) && f.wn > 0) setSt(f, St.Shoot);
@@ -534,8 +534,11 @@ function updateBody(w: World, f: Fighter) {
       f.jumpT++;
       if (landed) {
         f.vx = 0;
-        setSt(f, St.Idle);
+        setSt(f, isPlayer(f) ? St.Land : St.Idle);
       }
+      break;
+    case St.Land:
+      if (f.t >= 6) setSt(f, St.Idle);
       break;
     case St.Punch:
     case St.Kick:
