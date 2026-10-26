@@ -199,6 +199,8 @@ export class NetSession implements Session {
 function lerpSnap(a: Snapshot, b: Snapshot, k: number): Snapshot {
   const prev = new Map(a.f.map((f) => [f.i, f]));
   const pitems = new Map(a.it.map((i) => [i.i, i]));
+  // a new lap slides the whole world back, so there is nothing sensible to blend with
+  if (a.lp !== b.lp) return b;
   const mix = (p: number, q: number) => p + (q - p) * k;
   return {
     ...b,

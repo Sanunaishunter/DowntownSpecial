@@ -3,7 +3,9 @@ import { Btn } from '../src/shared/constants';
 import { addPlayer, createWorld, snapshot, step } from '../src/shared/sim';
 import { AURA, BEAM, MP_MAX, SHIELD, SP, SPECIALS, VOLLEY } from '../src/shared/specials';
 import { St, type Fighter, type PlayerInput, type World } from '../src/shared/types';
-import { WEAPONS, WID } from '../src/shared/weapons';
+import { ITEM_1UP, ITEM_TONIC, WEAPONS, WID } from '../src/shared/weapons';
+import { DEFS } from '../src/shared/defs';
+import { STAGE } from '../src/shared/stage';
 
 const none: PlayerInput = { held: 0, pressed: 0 };
 
@@ -252,7 +254,7 @@ describe('weapons', () => {
 });
 
 describe('drops', () => {
-  it('a defeated boss always drops a strong weapon', () => {
+  it('a defeated boss always drops a strong weapon and a 1UP', () => {
     const w = setup();
     const boss = foe(w, 100, 0, 'shogun', 'boss', 10);
     boss.hp = 0;
@@ -260,9 +262,28 @@ describe('drops', () => {
     boss.t = 44;
     boss.lastSlot = 0;
     run(w, 4);
-    expect(w.items.length).toBe(1);
-    expect([WID.Saber, WID.Rifle]).toContain(w.items[0].kind);
-    expect(w.items[0].n).toBe(WEAPONS[w.items[0].kind].uses);
+    expect(w.items.length).toBe(2);
+    const gun = w.items.find((i) => i.kind !== ITEM_1UP)!;
+    expect([WID.Saber, WID.Rifle]).toContain(gun.kind);
+    expect(gun.n).toBe(WEAPONS[gun.kind].uses);
+    expect(w.items.filter((i) => i.kind === ITEM_1UP).length).toBe(1);
+  });
+
+  it('every kind of weapon can drop from an ordinary enemy', () => {
+    const seen = new Set<number>();
+    for (let seed = 1; seed <= 400; seed++) {
+      const w = createWorld(seed);
+      addPlayer(w, 0);
+      for (let i = 0; i < 5; i++) step(w, [none, undefined]);
+      w.stageT = -100000;
+      const g = foe(w, 100, 0, 'saburo', 'grunt', 10);
+      g.hp = 0;
+      g.st = St.Down;
+      g.t = 44;
+      for (let i = 0; i < 4; i++) step(w, [none, undefined]);
+      for (const it of w.items) if (it.kind !== ITEM_TONIC) seen.add(it.kind);
+    }
+    expect([...seen].sort()).toEqual([WID.Stick, WID.Bamboo, WID.Stone, WID.Saber, WID.Rifle]);
   });
 
   it('grunts sometimes drop a weapon', () => {
@@ -277,10 +298,11 @@ describe('drops', () => {
       g.st = St.Down;
       g.t = 44;
       for (let i = 0; i < 4; i++) step(w, [none, undefined]);
-      drops += w.items.length;
+      drops += w.items.filter((it) => it.kind !== ITEM_TONIC).length;
     }
-    expect(drops).toBeGreaterThan(5);
-    expect(drops).toBeLessThan(30);
+    // about a third of 60 grunts
+    expect(drops).toBeGreaterThan(10);
+    expect(drops).toBeLessThan(32);
   });
 });
 
@@ -530,5 +552,227 @@ describe('ninja throwing stars', () => {
     w.shots.push({ id: w.nextId++, kind: 2, x: other.x - 20, y: other.y, z: 20, vx: 3.2, owner: 0, life: 90 });
     run(w, 5);
     expect(other.hp).toBe(50);
+  });
+});
+
+// Puts the world at the end of a lap: only the last wave is left to clear.
+function atLapEnd() {
+  const w = setup();
+  const p = player(w);
+  w.wave = STAGE.waves.length;
+  w.locked = false;
+  w.cam = 1024;
+  w.camMax = 1024;
+  p.x = 1100;
+  return { w, p };
+}
+
+describe('endless loop', () => {
+  it('after the last wave the next lap starts at once, keeping lives, score, weapon and cooldowns', () => {
+    const { w, p } = atLapEnd();
+    w.slots[0].lives = 2;
+    w.slots[0].score = 4200;
+    p.weapon = WID.Saber;
+    p.wn = 12;
+    p.hp = 33;
+    p.sp[SP.Aura] = 500;
+    w.items.push({ id: w.nextId++, kind: WID.Bamboo, x: 1150, y: p.y, z: 0, vx: 0, vy: 0, vz: 0, owner: 0, n: 5 });
+    run(w, 400);
+    expect(w.lap).toBe(1);
+    expect(w.status).toBe(0);
+    expect(w.cam).toBeLessThan(5);
+    expect(w.wave).toBeLessThanOrEqual(1);
+    expect(p.x).toBeLessThan(300);
+    expect(w.slots[0].lives).toBe(2);
+    expect(w.slots[0].score).toBe(4200);
+    expect(p.weapon).toBe(WID.Saber);
+    expect(p.wn).toBe(12);
+    expect(p.hp).toBe(33);
+    expect(p.sp[SP.Aura]).toBeGreaterThan(0);
+    const bamboo = w.items.find((i) => i.kind === WID.Bamboo)!;
+    expect(bamboo.n).toBe(5);
+    expect(bamboo.x).toBeLessThan(300);
+  });
+
+  it('the first wave comes again, and a second lap can follow', () => {
+    const { w } = atLapEnd();
+    run(w, 250);
+    expect(w.lap).toBe(1);
+    expect(w.fighters.some((f) => f.kind !== 'player')).toBe(true);
+    // beat the lap again
+    w.wave = STAGE.waves.length;
+    w.locked = false;
+    w.fighters = w.fighters.filter((f) => f.kind === 'player');
+    w.cam = 1024;
+    run(w, 400);
+    expect(w.lap).toBe(2);
+  });
+
+  it('does not loop while a wave is still being fought', () => {
+    const { w } = atLapEnd();
+    w.wave = STAGE.waves.length - 1;
+    w.locked = true;
+    foe(w, 60, 0, 'saburo', 'grunt', 9999);
+    run(w, 500);
+    expect(w.lap).toBe(0);
+  });
+
+  it('reports the lap in the snapshot', () => {
+    const { w } = atLapEnd();
+    run(w, 400);
+    expect(snapshot(w).lp).toBe(1);
+  });
+});
+
+describe('1UP', () => {
+  it('is picked up by walking over it and adds a life, not held as a weapon', () => {
+    const w = setup();
+    const p = player(w);
+    w.slots[0].lives = 3;
+    w.items.push({ id: w.nextId++, kind: ITEM_1UP, x: p.x + 60, y: p.y, z: 0, vx: 0, vy: 0, vz: 0, owner: 0, n: 0 });
+    press(w, Btn.A);
+    run(w, 20);
+    expect(p.weapon).toBe(0);
+    expect(w.slots[0].lives).toBe(3);
+    run(w, 80, { held: Btn.Right, pressed: 0 });
+    expect(w.slots[0].lives).toBe(4);
+    expect(w.items.length).toBe(0);
+  });
+
+  it('stays on the ground until somebody takes it, even into the next lap', () => {
+    const { w, p } = atLapEnd();
+    w.items.push({ id: w.nextId++, kind: ITEM_1UP, x: 1010, y: p.y - 40, z: 0, vx: 0, vy: 0, vz: 0, owner: 0, n: 0 });
+    run(w, 400);
+    expect(w.lap).toBe(1);
+    expect(w.items.some((i) => i.kind === ITEM_1UP)).toBe(true);
+  });
+});
+
+describe('越打越難', () => {
+  // The world just before the first wave of a given lap spawns.
+  const lapWorld = (lap: number, seed = 11) => {
+    const w = setup(seed);
+    w.lap = lap;
+    w.stageT = 100;
+    return w;
+  };
+  const foes = (w: World) => w.fighters.filter((f) => f.kind !== 'player');
+
+  it('lap 1 is the plain stage', () => {
+    const w = lapWorld(0);
+    run(w, 5);
+    const fs = foes(w);
+    expect(fs.length).toBe(STAGE.waves[0].enemies.length);
+    expect(fs.every((f) => f.maxHp === DEFS[f.def].hp)).toBe(true);
+  });
+
+  it('each lap adds one enemy to a wave and 10% health', () => {
+    for (const lap of [1, 2, 5]) {
+      const w = lapWorld(lap);
+      run(w, 5);
+      const fs = foes(w);
+      expect(fs.length).toBe(STAGE.waves[0].enemies.length + lap);
+      for (const f of fs) expect(f.maxHp).toBe(Math.round(DEFS[f.def].hp * (1 + 0.1 * lap)));
+      expect(fs.every((f) => f.hp === f.maxHp)).toBe(true);
+    }
+  });
+
+  it('the last wave gets more grunts but still only one general', () => {
+    const w = lapWorld(3);
+    w.wave = STAGE.waves.length - 1;
+    w.cam = 1024;
+    w.camMax = 1024;
+    player(w).x = 1100;
+    run(w, 5);
+    const last = STAGE.waves[STAGE.waves.length - 1];
+    expect(foes(w).length).toBe(last.enemies.length + 3);
+    expect(foes(w).filter((f) => f.kind === 'boss').length).toBe(1);
+    expect(foes(w).find((f) => f.kind === 'boss')!.maxHp).toBe(Math.round(DEFS.shogun.hp * 1.3));
+  });
+
+  it('enemies hit harder every lap', () => {
+    const lost = (lap: number) => {
+      const w = setup();
+      w.lap = lap;
+      const p = player(w);
+      p.inv = 0;
+      p.face = 1;
+      p.maxHp = p.hp = 1000;
+      const e = foe(w, -14, 0, 'bushi', 'grunt', 9999);
+      e.face = 1;
+      e.aiT = 0;
+      e.cd = 0;
+      run(w, 60);
+      return p.maxHp - p.hp;
+    };
+    const base = lost(0);
+    expect(base).toBeGreaterThan(0);
+    expect(lost(10)).toBeGreaterThan(base * 1.5);
+  });
+
+  it('ninja stars hurt more every lap', () => {
+    const dmg = (lap: number) => {
+      const w = setup();
+      w.lap = lap;
+      const p = player(w);
+      p.inv = 0;
+      p.maxHp = p.hp = 500;
+      w.shots.push({ id: w.nextId++, kind: 2, x: p.x - 3, y: p.y, z: 20, vx: 3.2, owner: 0, life: 90 });
+      run(w, 5);
+      return p.maxHp - p.hp;
+    };
+    expect(dmg(10)).toBe(Math.round(6 * 2));
+    expect(dmg(0)).toBe(6);
+  });
+});
+
+describe('tonic', () => {
+  it('about one defeated enemy in ten leaves one', () => {
+    let tonics = 0;
+    const n = 600;
+    for (let seed = 1; seed <= n; seed++) {
+      const w = createWorld(seed);
+      addPlayer(w, 0);
+      for (let i = 0; i < 5; i++) step(w, [none, undefined]);
+      w.stageT = -100000;
+      const g = foe(w, 100, 0, 'saburo', 'grunt', 10);
+      g.hp = 0;
+      g.st = St.Down;
+      g.t = 44;
+      for (let i = 0; i < 4; i++) step(w, [none, undefined]);
+      tonics += w.items.filter((it) => it.kind === ITEM_TONIC).length;
+    }
+    expect(tonics).toBeGreaterThan(n * 0.06);
+    expect(tonics).toBeLessThan(n * 0.14);
+  });
+
+  it('walking over it raises the health and mana caps by 10 and heals 10', () => {
+    const w = setup();
+    const p = player(w);
+    p.hp = 50;
+    const max = p.maxHp;
+    w.items.push({ id: w.nextId++, kind: ITEM_TONIC, x: p.x + 40, y: p.y, z: 0, vx: 0, vy: 0, vz: 0, owner: 0, n: 0 });
+    press(w, Btn.A);
+    run(w, 20);
+    expect(p.weapon).toBe(0);
+    run(w, 60, { held: Btn.Right, pressed: 0 });
+    expect(p.maxHp).toBe(max + 10);
+    expect(p.mpMax).toBe(110);
+    expect(p.hp).toBe(60);
+    expect(w.items.length).toBe(0);
+    const f = snapshot(w).f.find((q) => q.i === p.id)!;
+    expect(f.m).toBe(max + 10);
+    expect(f.em).toBe(110);
+  });
+
+  it('the bonus stays through death and the next lap', () => {
+    const { w, p } = atLapEnd();
+    p.maxHp += 20;
+    p.mpMax += 20;
+    p.hp = 5;
+    run(w, 400);
+    expect(w.lap).toBe(1);
+    expect(p.maxHp).toBe(120);
+    expect(p.mpMax).toBe(120);
   });
 });

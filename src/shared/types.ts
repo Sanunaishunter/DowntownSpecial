@@ -46,6 +46,8 @@ export interface Fighter {
   t: number;
   hp: number;
   maxHp: number;
+  /** cap of the blue bar (raised by tonics, nothing draws on it yet) */
+  mpMax: number;
   weapon: number;
   holding: number;
   heldBy: number;
@@ -125,8 +127,13 @@ export interface World {
   camMax: number;
   wave: number;
   locked: boolean;
-  status: 0 | 1 | 2;
+  /** 0 playing, 2 game over (the stage itself never ends, see lap) */
+  status: 0 | 2;
   statusT: number;
+  /** laps finished: the stage loops forever, each time the general falls the next lap starts */
+  lap: number;
+  /** ticks since the last wave of the lap was cleared */
+  lapT: number;
   slots: PlayerSlot[];
 }
 
@@ -146,6 +153,8 @@ export interface SnapFighter {
   t: number;
   h: number;
   m: number;
+  /** blue bar cap */
+  em: number;
   w: number;
   v: number;
   e: number;
@@ -183,10 +192,12 @@ export interface SnapSlot {
 export interface Snapshot {
   n: number;
   c: number;
-  s: 0 | 1 | 2;
+  s: 0 | 2;
   wv: number;
   wt: number;
   lk: 0 | 1;
+  /** laps finished */
+  lp: number;
   sl: SnapSlot[];
   f: SnapFighter[];
   it: SnapItem[];

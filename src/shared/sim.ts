@@ -3,13 +3,21 @@ import { DEFS, PLAYER_DEFS } from './defs';
 import { AURA, BEAM, HALO, MP_MAX, SHIELD, SP, SPECIALS, VOLLEY } from './specials';
 import { STAGE, type WaveDef } from './stage';
 import { St, type Fighter, type PlayerInput, type Snapshot, type World } from './types';
-import { BULLET, SHURIKEN, UNLIMITED, WEAPONS, type AtkDef } from './weapons';
+import { BULLET, ITEM_1UP, ITEM_TONIC, SHURIKEN, UNLIMITED, WEAPONS, type AtkDef } from './weapons';
 
 const PEND_WINDOW = 3;
 const UPPER_WINDOW = 12;
 const AB = Btn.A | Btn.B;
 const HOLD_Z = 34;
-const DROP_RATE = 0.22;
+const DROP_RATE = 0.33;
+/** ticks after the last wave of a lap is cleared before the next lap starts */
+const LAP_DELAY = 150;
+const MAX_LIVES = 9;
+/** each lap enemies get this much more health and attack (of their base values), and one more enemy per wave */
+const LAP_STAT_STEP = 0.1;
+/** chance that a defeated enemy leaves a tonic */
+const TONIC_RATE = 0.1;
+const TONIC_BONUS = 10;
 
 const ATK: Record<number, AtkDef> = {
   [St.Punch]: { start: 2, active: 3, total: 12, dmg: 6, reach: 20, kbx: 1.0, knock: false, launch: 0, stun: 20 },
@@ -55,6 +63,7 @@ function mkFighter(w: World, def: string, slot: number, x: number, y: number): F
     t: 0,
     hp: d.hp,
     maxHp: d.hp,
+    mpMax: MP_MAX,
     weapon: 0,
     holding: 0,
     heldBy: 0,
@@ -102,6 +111,8 @@ export function createWorld(seed = 1): World {
     locked: false,
     status: 0,
     statusT: 0,
+    lap: 0,
+    lapT: 0,
     slots: Array.from({ length: MAX_PLAYERS }, () => ({ a: 0 as const, lives: 3, score: 0, fid: 0, rt: 0 })),
   };
 }
@@ -119,6 +130,8 @@ export function resetWorld(w: World) {
   w.locked = false;
   w.status = 0;
   w.statusT = 0;
+  w.lap = 0;
+  w.lapT = 0;
   w.slots.forEach((s, i) => {
     s.a = 0;
     s.fid = 0;
@@ -176,6 +189,7 @@ export function step(w: World, inputs: Array<PlayerInput | undefined>) {
   applyAttacks(w);
   applyThrown(w);
   updateItems(w);
+  pickUpWalkOvers(w);
   updateShots(w);
   w.fighters = w.fighters.filter((f) => !(!isPlayer(f) && f.st === St.Dead && f.t >= 40));
   updateStage(w);
@@ -385,7 +399,7 @@ function nearestDowned(w: World, f: Fighter): Fighter | undefined {
 
 function nearestItem(w: World, f: Fighter) {
   for (const it of w.items) {
-    if (it.owner || it.z > 1) continue;
+    if (it.owner || it.z > 1 || it.kind >= ITEM_1UP) continue;
     if (Math.abs(it.x - f.x) <= 16 && Math.abs(it.y - f.y) <= 9) return it;
   }
   return undefined;
@@ -720,7 +734,7 @@ function applyAttacks(w: World) {
       const e = byId(w, a.holding);
       if (e) e.hp = Math.max(1, e.hp - 6);
     }
-    const mul = DEFS[a.def].dmg * (a.aura > 0 ? AURA.mult : 1);
+    const mul = DEFS[a.def].dmg * (a.aura > 0 ? AURA.mult : 1) * (isPlayer(a) ? 1 : lapMul(w));
     for (const t of w.fighters) {
       if (t === a || t.heldBy || isPlayer(t) === isPlayer(a)) continue;
       if (a.hits.includes(t.id)) continue;
@@ -815,6 +829,8 @@ function breakWeapon(w: World, f: Fighter) {
 
 function dropOnDeath(w: World, f: Fighter) {
   const boss = f.kind === 'boss';
+  if (boss) w.items.push({ id: w.nextId++, kind: ITEM_1UP, x: f.x - 18, y: f.y, z: 14, vx: 0, vy: 0, vz: 0.5, owner: 0, n: 0 });
+  if (rand(w) < TONIC_RATE) w.items.push({ id: w.nextId++, kind: ITEM_TONIC, x: f.x + 18, y: f.y, z: 14, vx: 0, vy: 0, vz: 0.5, owner: 0, n: 0 });
   if (!boss && rand(w) >= DROP_RATE) return;
   const defs = Object.values(WEAPONS);
   const weights = defs.map((d) => (boss ? d.bossWeight : d.dropWeight));
@@ -945,7 +961,7 @@ function updateShots(w: World) {
       for (const t of w.fighters) {
         if (!isPlayer(t) || !vulnerable(t)) continue;
         if (Math.abs(t.x - s.x) > 8 || Math.abs(t.y - s.y) > 7 || Math.abs(t.z + 14 - s.z) > 16) continue;
-        hit(w, t, -1, SHURIKEN.dmg, SHURIKEN.kbx, false, 0, s.vx >= 0 ? 1 : -1);
+        hit(w, t, -1, Math.round(SHURIKEN.dmg * lapMul(w)), SHURIKEN.kbx, false, 0, s.vx >= 0 ? 1 : -1);
         s.life = 0;
         break;
       }
@@ -1009,11 +1025,26 @@ function updateBeam(w: World, f: Fighter) {
 
 // ---------- stage ----------
 
+/** Enemies are 10% stronger per lap finished, in health and attack. */
+function lapMul(w: World) {
+  return 1 + LAP_STAT_STEP * w.lap;
+}
+
 function spawnWave(w: World, wd: WaveDef) {
-  for (const e of wd.enemies) {
+  const list = [...wd.enemies];
+  // every lap brings one more enemy to each wave (never another general)
+  const crowd = wd.enemies.filter((e) => DEFS[e.def].kind !== 'boss');
+  for (let k = 0; k < w.lap && crowd.length; k++) {
+    const t = crowd[k % crowd.length];
+    list.push({ def: t.def, side: k % 2 ? ((-t.side) as 1 | -1) : t.side, y: clamp(t.y + ((k * 37) % 50) - 25, GROUND_MIN, GROUND_MAX), dx: 40 + 22 * k });
+  }
+  const mul = lapMul(w);
+  for (const e of list) {
     const dx = e.dx ?? 0;
     const x = e.side > 0 ? w.cam + SCREEN_W + 14 + dx : w.cam - 14 - dx;
     const f = mkFighter(w, e.def, -1, x, e.y);
+    f.maxHp = Math.round(f.maxHp * mul);
+    f.hp = f.maxHp;
     f.face = e.side > 0 ? -1 : 1;
     f.cd = 40 + Math.floor(rand(w) * 60);
     w.fighters.push(f);
@@ -1060,11 +1091,8 @@ function updateStage(w: World) {
       w.locked = false;
       w.wave++;
       w.camMax = w.wave < waves.length ? waves[w.wave].at : STAGE_W - SCREEN_W;
-      if (w.wave >= waves.length) {
-        w.status = 1;
-        w.statusT = 0;
-      }
     }
+    if (!w.locked && w.wave >= waves.length && ++w.lapT >= LAP_DELAY) nextLap(w);
     const act = w.slots.filter((s) => s.a);
     if (act.length && act.every((s) => s.lives <= 0)) {
       w.status = 2;
@@ -1072,8 +1100,47 @@ function updateStage(w: World) {
     }
   } else {
     w.statusT++;
-    if (w.statusT >= (w.status === 1 ? 600 : 420)) resetWorld(w);
+    if (w.statusT >= 420) resetWorld(w);
   }
+}
+
+/**
+ * The stage never ends: once the general and the last wave are down, everything (heroes, items lying around, shots) slides
+ * back by one stage length and the first wave comes again. Lives, score, weapons and cooldowns carry over.
+ */
+function nextLap(w: World) {
+  const shift = w.cam;
+  for (const f of w.fighters) f.x = Math.max(0, f.x - shift);
+  for (const it of w.items) it.x = Math.max(0, it.x - shift);
+  for (const s of w.shots) s.x -= shift;
+  w.ev.length = 0;
+  w.cam = 0;
+  w.camMax = STAGE.waves[0].at;
+  w.wave = 0;
+  w.locked = false;
+  w.stageT = 0;
+  w.lapT = 0;
+  w.lap++;
+}
+
+/** The 1UP and the tonic are taken just by walking over them. */
+function pickUpWalkOvers(w: World) {
+  for (const it of w.items) {
+    if ((it.kind !== ITEM_1UP && it.kind !== ITEM_TONIC) || it.z > 1) continue;
+    const p = w.fighters.find((f) => isPlayer(f) && f.hp > 0 && f.st !== St.Dead && Math.abs(f.x - it.x) <= 16 && Math.abs(f.y - it.y) <= 12);
+    if (!p) continue;
+    if (it.kind === ITEM_1UP) {
+      const s = w.slots[p.slot];
+      if (s) s.lives = Math.min(MAX_LIVES, s.lives + 1);
+    } else {
+      p.maxHp += TONIC_BONUS;
+      p.hp += TONIC_BONUS;
+      p.mpMax += TONIC_BONUS;
+    }
+    it.kind = 0;
+    w.ev.push([it.x, it.y, 14, 1]);
+  }
+  w.items = w.items.filter((it) => it.kind !== 0);
 }
 
 // ---------- snapshot ----------
@@ -1088,6 +1155,7 @@ export function snapshot(w: World): Snapshot {
     wv: w.wave,
     wt: STAGE.waves.length,
     lk: w.locked ? 1 : 0,
+    lp: w.lap,
     sl: w.slots.map((s) => ({ a: s.a, l: s.lives, p: s.score, f: s.fid })),
     f: w.fighters.map((f) => ({
       i: f.id,
@@ -1100,6 +1168,7 @@ export function snapshot(w: World): Snapshot {
       t: f.t,
       h: f.hp,
       m: f.maxHp,
+      em: f.mpMax,
       w: f.weapon,
       v: f.inv,
       e: Math.round(f.mp),

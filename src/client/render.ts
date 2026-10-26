@@ -2,13 +2,15 @@ import { SCREEN_H, SCREEN_W, STAGE_W } from '../shared/constants';
 import { DEFS } from '../shared/defs';
 import { BEAM, HALO, MP_MAX, SPECIALS } from '../shared/specials';
 import { St, type GameEvent, type SnapFighter, type SnapItem, type Snapshot } from '../shared/types';
-import { UNLIMITED, WEAPONS, WID } from '../shared/weapons';
+import { ITEM_1UP, ITEM_TONIC, UNLIMITED, WEAPONS, WID } from '../shared/weapons';
 import type { Assets } from './assets';
 import { PixelSprites } from './pixelart';
 
 const SIGNS = ['酒', '茶', '宿', '湯'];
 const BW = 112;
 const HORIZON = 128;
+const LAP_FADE_MS = 1400;
+const HUD_BAR_MAX = 112;
 
 interface Fx {
   x: number;
@@ -31,6 +33,8 @@ export class Renderer {
   private sprites = new PixelSprites();
   private buffT0 = new Map<string, number>();
   private fxCanvas = document.createElement('canvas');
+  private lap = 0;
+  private lapT0 = -1e9;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -62,7 +66,7 @@ export class Renderer {
     tintForTime(ctx, cam);
     if (!snap) return;
 
-    for (const it of snap.it) drawItem(ctx, it, cam);
+    for (const it of snap.it) drawItem(ctx, it, cam, o.now);
 
     const fs = [...snap.f].sort((a, b) => a.y - b.y);
     for (const f of fs) this.drawFighter(f, cam, o.now);
@@ -73,6 +77,21 @@ export class Renderer {
     for (const e of this.fx) drawSpark(ctx, e, cam, (o.now - e.t0) / 200);
 
     drawHud(ctx, snap, o);
+
+    // a new lap: cut to black on the stage start, then fade the title and the picture back in
+    if (snap.lp !== this.lap) {
+      if (snap.lp > this.lap) this.lapT0 = o.now;
+      this.lap = snap.lp;
+    }
+    const fade = 1 - (o.now - this.lapT0) / LAP_FADE_MS;
+    if (fade > 0) {
+      ctx.fillStyle = `rgba(0,0,0,${Math.min(1, fade * 1.6)})`;
+      ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+      ctx.globalAlpha = Math.min(1, fade * 2);
+      text(ctx, '東海道', SCREEN_W / 2, 88, '#ffe060', 'center', 20);
+      text(ctx, `第 ${snap.lp + 1} 周`, SCREEN_W / 2, 114, '#ffffff', 'center', 12);
+      ctx.globalAlpha = 1;
+    }
   }
 
   private drawFighter(f: SnapFighter, cam: number, now: number) {
@@ -378,14 +397,63 @@ function drawWeaponInHand(ctx: CanvasRenderingContext2D, f: SnapFighter) {
   ctx.restore();
 }
 
-function drawItem(ctx: CanvasRenderingContext2D, it: SnapItem, cam: number) {
+function drawItem(ctx: CanvasRenderingContext2D, it: SnapItem, cam: number, now: number) {
   const sx = Math.round(it.x - cam);
   const sy = Math.round(it.y);
   shadow(ctx, sx, sy, it.z, 7);
+  if (it.k === ITEM_1UP) {
+    draw1Up(ctx, sx, sy - Math.round(it.z), now);
+    return;
+  }
+  if (it.k === ITEM_TONIC) {
+    drawTonic(ctx, sx, sy - Math.round(it.z), now);
+    return;
+  }
   ctx.save();
   ctx.translate(sx - (it.k === WID.Stone ? 6 : 10), sy - 3 - Math.round(it.z));
   weaponGfx(ctx, it.k);
   ctx.restore();
+}
+
+// 1UP: a green mushroom-like badge that bobs and glints.
+function draw1Up(ctx: CanvasRenderingContext2D, x: number, y: number, now: number) {
+  const bob = Math.round(Math.sin(now / 160) * 2);
+  const R = (c: string, rx: number, ry: number, w: number, h: number) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(x + rx, y - 14 + bob + ry, w, h);
+  };
+  R('#101010', -8, 0, 16, 14);
+  R('#e8e0c8', -6, 7, 12, 6);
+  R('#30c030', -7, 1, 14, 7);
+  R('#a0ff90', -5, 2, 4, 2);
+  R('#ffffff', 1, 3, 4, 3);
+  R('#101010', -2, 9, 1, 2);
+  R('#101010', 1, 9, 1, 2);
+  if (Math.floor(now / 200) % 2 === 0) {
+    R('#ffffff', 7, -2, 1, 5);
+    R('#ffffff', 5, 0, 5, 1);
+  }
+  text(ctx, '1UP', x, y - 25 + bob, '#7dff7d', 'center', 7);
+}
+
+// Tonic: a bottle, red (health) on one side and blue (mana) on the other, with a glint.
+function drawTonic(ctx: CanvasRenderingContext2D, x: number, y: number, now: number) {
+  const bob = Math.round(Math.sin(now / 190) * 1.5);
+  const R = (c: string, rx: number, ry: number, w: number, h: number) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(x + rx, y - 14 + bob + ry, w, h);
+  };
+  R('#101010', -2, 0, 5, 3);
+  R('#c8a060', -1, 0, 3, 2);
+  R('#101010', -6, 3, 13, 12);
+  R('#d8e8f0', -5, 4, 11, 10);
+  R('#e03a3a', -5, 8, 5, 6);
+  R('#3a8aff', 0, 8, 6, 6);
+  R('#ffffff', -4, 5, 2, 3);
+  if (Math.floor(now / 220) % 2 === 0) {
+    R('#ffffff', 7, -1, 1, 5);
+    R('#ffffff', 5, 1, 5, 1);
+  }
 }
 
 function drawShot(ctx: CanvasRenderingContext2D, s: { k: number; x: number; y: number; z: number; r: 1 | -1 }, cam: number, now: number) {
@@ -644,15 +712,18 @@ function drawHud(ctx: CanvasRenderingContext2D, snap: Snapshot, o: DrawOpts) {
     if (!s.a) return;
     const f = snap.f.find((q) => q.i === s.f);
     const left = i === 0;
-    const x = left ? 8 : SCREEN_W - 8 - 70;
+    // the bars grow with the health and mana caps (70px per 100), up to a limit so two players still fit
+    const hpW = f ? Math.min(HUD_BAR_MAX, Math.round(f.m * 0.7)) : 70;
+    const mpW = f ? Math.min(HUD_BAR_MAX, Math.round(f.em * 0.7)) : 70;
+    const x = left ? 8 : SCREEN_W - 8 - Math.max(70, hpW, mpW);
     const name = DEFS[f?.d ?? ''] ? DEFS[f!.d].name : `P${i + 1}`;
     text(ctx, name + (i === o.mySlot ? ' ◀' : ''), x, 3);
-    bar(ctx, x, 14, 70, f ? f.h : 0, f ? f.m : 1);
-    energyBar(ctx, x, 21, 70, f ? f.e : 0, o.now, !!f && (f.b & 3) !== 0);
+    bar(ctx, x, 14, hpW, f ? f.h : 0, f ? f.m : 1);
+    energyBar(ctx, x, 21, mpW, f ? f.e : 0, o.now, !!f && (f.b & 3) !== 0);
     if (f) {
       // one pip per special: lit = ready, dark = cooling down
       SPECIALS.forEach((sp, n) => {
-        const px = x + 70 - (SPECIALS.length - n) * 7 + 1;
+        const px = x + hpW - (SPECIALS.length - n) * 7 + 1;
         ctx.fillStyle = '#000';
         ctx.fillRect(px - 1, 3, 6, 6);
         ctx.fillStyle = f.k[n] > 0 ? '#30303c' : PIP_COLORS[n];
@@ -668,16 +739,15 @@ function drawHud(ctx: CanvasRenderingContext2D, snap: Snapshot, o: DrawOpts) {
 
   const boss = snap.f.find((f) => DEFS[f.d]?.kind === 'boss' && f.s !== St.Dead);
   if (boss) {
-    text(ctx, DEFS[boss.d].name, SCREEN_W / 2, 3, '#ff9090', 'center');
+    text(ctx, `${DEFS[boss.d].name} Lv.${snap.lp + 1}`, SCREEN_W / 2, 3, '#ff9090', 'center');
     bar(ctx, SCREEN_W / 2 - 40, 14, 80, boss.h, boss.m);
   }
+  if (snap.lp > 0) text(ctx, `第 ${snap.lp + 1} 周　怪 Lv.${snap.lp + 1}`, SCREEN_W / 2, 24, '#ffe060', 'center', 7);
 
   if (snap.s === 0 && snap.lk === 0 && snap.wv < snap.wt && Math.floor(o.now / 400) % 2 === 0) {
     text(ctx, 'GO ▶', SCREEN_W - 12, 96, '#fff', 'right', 14);
   }
-  if (snap.s === 1) {
-    text(ctx, 'STAGE CLEAR', SCREEN_W / 2, 92, '#ffe060', 'center', 20);
-  } else if (snap.s === 2) {
+  if (snap.s === 2) {
     text(ctx, 'GAME OVER', SCREEN_W / 2, 92, '#ff6060', 'center', 20);
   }
   if (o.hint) text(ctx, o.hint, SCREEN_W / 2, SCREEN_H - 12, '#ffffff', 'center');
