@@ -133,6 +133,42 @@ input {
 #app.touch #touch {
   display: flex;
 }
+#dpadwrap {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+#runs {
+  display: flex;
+  gap: 10px;
+}
+#runs button {
+  width: 62px;
+  height: 40px;
+  border-radius: 20px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  touch-action: none;
+  user-select: none;
+}
+#runs button small {
+  font-size: 10px;
+  font-weight: 400;
+}
+#runs button.on {
+  background: #c08a20;
+}
 #dpad {
   position: relative;
   flex: none;
@@ -295,6 +331,7 @@ input {
     pointer-events: none;
   }
   #app.touch #dpad,
+  #app.touch #runs,
   #app.touch #specials,
   #app.touch #btns {
     pointer-events: auto;

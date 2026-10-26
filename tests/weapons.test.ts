@@ -1055,3 +1055,21 @@ describe('天雷萬鈞 (special 6)', () => {
     expect(p.storm).toBe(0);
   });
 });
+
+describe('run buttons', () => {
+  it('start a run in either direction while held, and stop when released', () => {
+    for (const [btn, dir] of [[Btn.RunR, 1], [Btn.RunL, -1]] as const) {
+      const w = setup();
+      const p = player(w);
+      w.cam = 500;
+      p.x = 640;
+      const x0 = p.x;
+      for (let i = 0; i < 30; i++) step(w, [{ held: btn, pressed: i === 0 ? btn : 0 }, undefined]);
+      expect(p.st).toBe(St.Run);
+      expect(p.face).toBe(dir);
+      expect((p.x - x0) * dir).toBeGreaterThan(30);
+      for (let i = 0; i < 20; i++) step(w, [none, undefined]);
+      expect(p.st).toBe(St.Idle);
+    }
+  });
+});

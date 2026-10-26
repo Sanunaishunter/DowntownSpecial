@@ -163,7 +163,7 @@ describe('websocket', () => {
 describe('protocol', () => {
   it('validates messages', () => {
     expect(parseClientMsg('{"t":"in","h":4095,"p":0}')).toEqual({ t: 'in', h: 4095, p: 0 });
-    expect(parseClientMsg('{"t":"in","h":4096,"p":0}')).toBeNull();
+    expect(parseClientMsg('{"t":"in","h":16384,"p":0}')).toBeNull();
     expect(parseClientMsg('{"t":"in","h":1.5,"p":0}')).toBeNull();
     expect(parseClientMsg('{"t":"join","code":123}')).toBeNull();
     expect(parseClientMsg('{"t":"nope"}')).toBeNull();

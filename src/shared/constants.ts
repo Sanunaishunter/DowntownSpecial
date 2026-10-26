@@ -23,7 +23,9 @@ export const Btn = {
   S4: 512,
   S5: 1024,
   S6: 2048,
+  RunL: 4096,
+  RunR: 8192,
 } as const;
 export const SPECIAL_BITS = [Btn.S1, Btn.S2, Btn.S3, Btn.S4, Btn.S5, Btn.S6];
 export const SPECIAL_MASK = Btn.S1 | Btn.S2 | Btn.S3 | Btn.S4 | Btn.S5 | Btn.S6;
-export const BTN_ALL = 4095;
+export const BTN_ALL = 16383;

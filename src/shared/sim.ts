@@ -209,7 +209,10 @@ export function step(w: World, inputs: Array<PlayerInput | undefined>) {
 // ---------- player ----------
 
 function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
-  const held = inp?.held ?? 0;
+  // the two run buttons count as walking that way, and start a run while they are held
+  const rawHeld = inp?.held ?? 0;
+  const runDir = rawHeld & Btn.RunR ? 1 : rawHeld & Btn.RunL ? -1 : 0;
+  const held = rawHeld | (rawHeld & Btn.RunR ? Btn.Right : 0) | (rawHeld & Btn.RunL ? Btn.Left : 0);
   const pressed = inp?.pressed ?? 0;
   const d = DEFS[f.def];
   if (f.inv > 0) f.inv--;
@@ -241,6 +244,11 @@ function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
 
   if (act) {
     const grounded = f.z === 0 && f.st !== St.Jump;
+    if (runDir && grounded && !rooted && (f.st === St.Idle || f.st === St.Walk || f.st === St.Land)) {
+      setSt(f, St.Run);
+      f.face = runDir;
+      f.tapT = 0;
+    }
     if (pressed & (Btn.Left | Btn.Right)) {
       const dir = pressed & Btn.Right ? 1 : -1;
       if (grounded && !rooted && f.st !== St.Hold && f.tapDir === dir && f.tapT > 0) {

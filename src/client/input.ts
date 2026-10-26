@@ -157,5 +157,7 @@ export function setupTouch(input: Input): TouchApi {
   bindBtn(document.getElementById('tb-a')!, Btn.A);
   bindBtn(document.getElementById('tb-b')!, Btn.B);
   bindBtn(document.getElementById('tb-j')!, Btn.A | Btn.B);
+  bindBtn(document.getElementById('tb-rl')!, Btn.RunL);
+  bindBtn(document.getElementById('tb-rr')!, Btn.RunR);
   return { bind: bindBtn };
 }

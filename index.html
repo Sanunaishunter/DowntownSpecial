@@ -28,12 +28,18 @@
           <p id="ver" class="ver"></p>
           <p class="help">
             方向：方向鍵 / WASD　拳：J 或 Z　腿：K 或 X　跳：空白鍵（A+B）<br />
-            跑步：左／右連按兩下　特殊技：按 1～6（各有冷卻）
+            跑步：左／右連按兩下（手機：方向鍵上方的左跑／右跑鍵）　特殊技：按 1～6（各有冷卻）
           </p>
         </div>
       </div>
       <div id="touch">
-        <div id="dpad"><div id="knob"></div></div>
+        <div id="dpadwrap">
+          <div id="runs">
+            <button id="tb-rl" type="button">«<small>左跑</small></button>
+            <button id="tb-rr" type="button">»<small>右跑</small></button>
+          </div>
+          <div id="dpad"><div id="knob"></div></div>
+        </div>
         <div id="btnwrap">
           <div id="specials"></div>
           <div id="btns">
