@@ -28,10 +28,10 @@ export const SPECIALS: SpecialDef[] = [
   def(2, 'halo', '光環', Btn.S3, 2700),
   def(3, 'aura', '爆氣', Btn.S4, 3600),
   def(4, 'shield', '聖盾', Btn.S5, 2700),
-  def(5, 'ultimate', '主角威能', Btn.S6, 7200),
+  def(5, 'thunder', '天雷萬鈞', Btn.S6, 7200),
 ];
 
-export const SP = { Beam: 0, Volley: 1, Halo: 2, Aura: 3, Shield: 4, Ultimate: 5 } as const;
+export const SP = { Beam: 0, Volley: 1, Halo: 2, Aura: 3, Shield: 4, Thunder: 5 } as const;
 
 /** The bar under the health bar shows how much of a running timed special is left (full = MP_MAX). */
 export const MP_MAX = 100;
@@ -40,7 +40,14 @@ export const BEAM = { charge: 24, fire: 360, recover: 14, pulse: 5, len: 190, dm
 export const VOLLEY = { shots: 10, gap: 14, speed: 4.5, life: 50, dmg: 14 };
 /** 光環: full heal, the light column is only a visual. */
 export const HALO = { vis: 110 };
+/** Enemies cast 光環 on themselves now and then: hurt (below `below` of max health), standing around, off cooldown. */
+export const ENEMY_HALO = { below: 0.6, heal: 0.4, chance: 1 / 90, cooldown: 600, pause: 30 };
 /** 爆氣: +200% damage for 20 seconds. */
 export const AURA = { dur: 1200, mult: 2 };
 /** 聖盾: +200% defence (damage taken / 3), no flinching, no walking, 10 seconds. */
 export const SHIELD = { dur: 600, def: 2 };
+/** 天雷萬鈞: for 10 seconds lightning keeps coming down on the battlefield, one strike every `gap` ticks. */
+export const THUNDER = { dur: 600, gap: 6, dmg: 8, radius: 20, aimed: 0.75 };
+/** 百裂拳 (run + A, no weapon): 20 uninterruptible punches. 龍捲風腳 (run + B, no weapon): a spinning kick that hits both sides. */
+export const BARRAGE = { punches: 20, gap: 4 };
+export const TATSU = { total: 54, gap: 6, rise: 6, fall: 8, height: 12, speed: 1.1 };

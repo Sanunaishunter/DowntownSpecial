@@ -1,9 +1,9 @@
 import { Btn, GRAVITY, GROUND_MAX, GROUND_MIN, JUMP_V, MAX_PLAYERS, SCREEN_W, SPECIAL_MASK, STAGE_W } from './constants';
 import { DEFS, PLAYER_DEFS } from './defs';
-import { AURA, BEAM, HALO, MP_MAX, SHIELD, SP, SPECIALS, VOLLEY } from './specials';
+import { AURA, BARRAGE, BEAM, ENEMY_HALO, HALO, MP_MAX, SHIELD, SP, SPECIALS, TATSU, THUNDER, VOLLEY } from './specials';
 import { STAGE, type WaveDef } from './stage';
 import { St, type Fighter, type PlayerInput, type Snapshot, type World } from './types';
-import { BULLET, ITEM_1UP, ITEM_TONIC, SHURIKEN, UNLIMITED, WEAPONS, type AtkDef } from './weapons';
+import { BULLET, GATLING, ITEM_1UP, ITEM_TONIC, SHURIKEN, UNLIMITED, WEAPONS, WID, type AtkDef } from './weapons';
 
 const PEND_WINDOW = 3;
 const UPPER_WINDOW = 12;
@@ -28,6 +28,14 @@ const ATK: Record<number, AtkDef> = {
   [St.Swing]: { start: 5, active: 4, total: 22, dmg: 14, reach: 34, kbx: 1.8, knock: true, launch: 2.4, stun: 0 },
   [St.HoldSwing]: { start: 6, active: 5, total: 24, dmg: 12, reach: 30, kbx: 1.8, knock: true, launch: 2.4, stun: 0 },
   [St.Stomp]: { start: 4, active: 3, total: 20, dmg: 8, reach: 14, kbx: 0, knock: false, launch: 0, stun: 0 },
+  [St.Barrage]: { start: 2, active: BARRAGE.punches * BARRAGE.gap, total: 2 + BARRAGE.punches * BARRAGE.gap + 2, dmg: 3, reach: 24, kbx: 0.3, knock: false, launch: 0, stun: 18 },
+  [St.Tatsu]: { start: TATSU.rise, active: TATSU.total - TATSU.rise - TATSU.fall, total: TATSU.total, dmg: 5, reach: 26, kbx: 0.6, knock: false, launch: 0, stun: 18 },
+};
+
+/** Moves that hit again and again: the hit list is wiped every `gap` ticks; the last hit knocks down. `both` = hits both sides. */
+const MULTI: Record<number, { gap: number; both?: boolean }> = {
+  [St.Barrage]: { gap: BARRAGE.gap },
+  [St.Tatsu]: { gap: TATSU.gap, both: true },
 };
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
@@ -91,6 +99,9 @@ function mkFighter(w: World, def: string, slot: number, x: number, y: number): F
     aura: 0,
     shield: 0,
     halo: 0,
+    storm: 0,
+    heat: 0,
+    heatCd: 0,
     spOn: 0,
   };
 }
@@ -292,7 +303,12 @@ function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
   if (pressed & SPECIAL_MASK) {
     for (const s of SPECIALS) if (pressed & s.bit && canStartSpecial(f, s.id)) triggerSpecial(w, f, s.id);
   }
-  if (f.st === St.Shoot && f.t >= 9 && held & Btn.A && !(held & Btn.B) && f.wn > 0) setSt(f, St.Shoot);
+  if (f.storm > 0) tickStorm(w, f);
+  tickHeat(w, f);
+  if (f.weapon === WID.Gatling) {
+    // the gun keeps spraying while A is held, and stops when it is let go, empty or jammed
+    if (f.st === St.Shoot && (!(held & Btn.A) || f.wn <= 0 || f.heatCd > 0)) setSt(f, St.Idle);
+  } else if (f.st === St.Shoot && f.t >= 9 && held & Btn.A && !(held & Btn.B) && f.wn > 0) setSt(f, St.Shoot);
   updateBody(w, f);
   updateMeter(f);
 }
@@ -340,8 +356,8 @@ function resolveAction(w: World, f: Fighter, a: boolean, b: boolean, dx: number)
   }
   if (f.weapon) {
     const wd = WEAPONS[f.weapon];
-    if (wd.mode === 'ranged' && a && f.wn > 0) setSt(f, St.Shoot);
-    else if (b && wd.throwable) throwWeapon(w, f);
+    if (b) throwWeapon(w, f);
+    else if (wd.mode === 'ranged' && f.wn > 0 && !(f.weapon === WID.Gatling && f.heatCd > 0)) setSt(f, St.Shoot);
     else setSt(f, St.Swing);
     f.vx = 0;
     f.vy = 0;
@@ -372,7 +388,10 @@ function resolveAction(w: World, f: Fighter, a: boolean, b: boolean, dx: number)
     return;
   }
   if (f.st === St.Run) {
-    setSt(f, St.Dash);
+    // empty-handed run + A / B: 百裂拳 / 龍捲風腳
+    setSt(f, a ? St.Barrage : St.Tatsu);
+    f.vx = 0;
+    f.vy = 0;
     return;
   }
   setSt(f, a ? St.Punch : St.Kick);
@@ -405,6 +424,7 @@ function nearestItem(w: World, f: Fighter) {
   return undefined;
 }
 
+/** B: throw the weapon away. Throwing ones fly and hurt; the rest are just tossed a little way so another can be picked up. */
 function throwWeapon(w: World, f: Fighter) {
   const wd = WEAPONS[f.weapon];
   setSt(f, St.Throw);
@@ -414,10 +434,10 @@ function throwWeapon(w: World, f: Fighter) {
     x: f.x + f.face * 8,
     y: f.y,
     z: f.z + 14,
-    vx: f.face * wd.throwVx,
+    vx: f.face * (wd.throwable ? wd.throwVx : 1.4),
     vy: 0,
-    vz: 0.8,
-    owner: f.slot + 1,
+    vz: wd.throwable ? 0.8 : 0.5,
+    owner: wd.throwable ? f.slot + 1 : 0,
     n: f.wn,
   });
   f.weapon = 0;
@@ -486,7 +506,19 @@ function nearestPlayer(w: World, e: Fighter): Fighter | undefined {
 function updateEnemy(w: World, e: Fighter) {
   const d = DEFS[e.def];
   if (e.inv > 0) e.inv--;
+  if (e.halo > 0) e.halo--;
+  if (e.sp[SP.Halo] > 0) e.sp[SP.Halo]--;
   if (e.st === St.Idle || e.st === St.Walk) {
+    // 光環: a hurt enemy that is not busy sometimes heals itself with holy light, and stands still for a moment doing it
+    if (e.hp > 0 && e.hp < e.maxHp * ENEMY_HALO.below && e.sp[SP.Halo] <= 0 && rand(w) < ENEMY_HALO.chance) {
+      e.hp = Math.min(e.maxHp, e.hp + Math.ceil(e.maxHp * ENEMY_HALO.heal));
+      e.halo = HALO.vis;
+      e.sp[SP.Halo] = ENEMY_HALO.cooldown;
+      e.aiT = Math.max(e.aiT, ENEMY_HALO.pause);
+      e.vx = 0;
+      e.vy = 0;
+      w.ev.push([e.x, e.y, 14, 1]);
+    }
     const tgt = nearestPlayer(w, e);
     if (!tgt) {
       e.vx = 0;
@@ -586,6 +618,10 @@ function updateBody(w: World, f: Fighter) {
     case St.Shoot:
       f.vx = 0;
       f.vy = 0;
+      if (isPlayer(f) && f.weapon === WID.Gatling) {
+        if (f.t % GATLING.gap === 1) fireGatling(w, f);
+        break;
+      }
       if (DEFS[f.def].ranged) {
         if (f.t === 3) throwShuriken(w, f);
       } else if (f.t === 2) fireBullet(w, f);
@@ -596,6 +632,17 @@ function updateBody(w: World, f: Fighter) {
       break;
     case St.Beam:
       updateBeam(w, f);
+      break;
+    case St.Barrage:
+      f.vx = f.face * 0.25;
+      f.vy = 0;
+      if (f.t >= ATK[St.Barrage].total) {
+        f.vx = 0;
+        setSt(f, St.Idle);
+      }
+      break;
+    case St.Tatsu:
+      updateTatsu(f);
       break;
     case St.HoldSwing:
       f.vx = 0;
@@ -672,6 +719,7 @@ function die(w: World, f: Fighter) {
     f.aura = 0;
     f.shield = 0;
     f.halo = 0;
+    f.storm = 0;
     f.spOn = 0;
   } else {
     if (f.lastSlot >= 0 && w.slots[f.lastSlot]) w.slots[f.lastSlot].score += DEFS[f.def].score;
@@ -681,10 +729,13 @@ function die(w: World, f: Fighter) {
 
 // ---------- combat ----------
 
-function hit(w: World, t: Fighter, srcSlot: number, dmg: number, kbx: number, knock: boolean, launch: number, dir: number) {
-  if (t.shield > 0 && isPlayer(t)) {
+/** `chain`: part of a flurry (or a spray), so being hit again and again never counts towards the three-hit knockdown. */
+function hit(w: World, t: Fighter, srcSlot: number, dmg: number, kbx: number, knock: boolean, launch: number, dir: number, chain = false) {
+  // 百裂拳 and 龍捲風腳 cannot be interrupted: the hits still hurt, unless they would be lethal
+  const firm = isPlayer(t) && (t.st === St.Barrage || t.st === St.Tatsu);
+  if (isPlayer(t) && (t.shield > 0 || firm)) {
     // 聖盾: a third of the damage and no flinching, unless it would still be lethal
-    dmg = Math.max(1, Math.round(dmg / (1 + SHIELD.def)));
+    if (t.shield > 0) dmg = Math.max(1, Math.round(dmg / (1 + SHIELD.def)));
     if (t.hp - dmg > 0) {
       t.hp -= dmg;
       t.combo = 0;
@@ -698,7 +749,7 @@ function hit(w: World, t: Fighter, srcSlot: number, dmg: number, kbx: number, kn
   t.hp = Math.max(0, t.hp - dmg);
   if (srcSlot >= 0) t.lastSlot = srcSlot;
   t.combo++;
-  const down = t.hp <= 0 || knock || t.combo >= 3 || t.z > 0;
+  const down = t.hp <= 0 || knock || (!chain && t.combo >= 3) || t.z > 0;
   t.face = dir > 0 ? -1 : 1;
   if (down) {
     if (t.weapon) {
@@ -730,6 +781,8 @@ function applyAttacks(w: World) {
     const atk = atkFor(a);
     if (!atk || a.heldBy) continue;
     if (a.t < atk.start || a.t >= atk.start + atk.active) continue;
+    const multi = MULTI[a.st];
+    if (multi && (a.t - atk.start) % multi.gap === 0) a.hits = [];
     if (a.st === St.HoldSwing && a.t === atk.start) {
       const e = byId(w, a.holding);
       if (e) e.hp = Math.max(1, e.hp - 6);
@@ -742,7 +795,7 @@ function applyAttacks(w: World) {
         if (t.st !== St.Down || t.z > 0) continue;
       } else if (!vulnerable(t)) continue;
       const rx = (t.x - a.x) * a.face;
-      if (rx < -6 || rx > atk.reach + 6) continue;
+      if (multi?.both ? Math.abs(rx) > atk.reach + 6 : rx < -6 || rx > atk.reach + 6) continue;
       if (Math.abs(t.y - a.y) > 9) continue;
       if (Math.abs(t.z - a.z) > 24) continue;
       a.hits.push(t.id);
@@ -753,7 +806,11 @@ function applyAttacks(w: World) {
         if (a.slot >= 0) t.lastSlot = a.slot;
         w.ev.push([t.x, t.y, 6, 0]);
       } else {
-        hit(w, t, a.slot, dmg, atk.kbx, atk.knock, atk.launch, a.face);
+        if (multi) {
+          // the last hit of a flurry sends them flying; the ones before it only keep them pinned
+          const last = a.t + multi.gap >= atk.start + atk.active;
+          hit(w, t, a.slot, dmg, last ? 2.0 : atk.kbx, last, last ? 2.4 : 0, multi.both && t.x < a.x ? -1 : multi.both ? 1 : a.face, true);
+        } else hit(w, t, a.slot, dmg, atk.kbx, atk.knock, atk.launch, a.face);
         if (a.st === St.Swing) useWeapon(w, a);
       }
     }
@@ -856,7 +913,7 @@ function slotMul(w: World, slot: number) {
 
 /** True while a timed special is running; the meter then shows how much of it is left. */
 function specialActive(f: Fighter) {
-  return f.st === St.Beam || f.volley > 0 || f.aura > 0 || f.shield > 0;
+  return f.st === St.Beam || f.volley > 0 || f.aura > 0 || f.shield > 0 || f.storm > 0;
 }
 
 /**
@@ -866,7 +923,8 @@ function specialActive(f: Fighter) {
 function canStartSpecial(f: Fighter, id: number) {
   if (f.hp <= 0 || f.sp[id] > 0 || f.holding) return false;
   if (f.st === St.Hurt || f.st === St.Down || f.st === St.GetUp || f.st === St.Dead || f.st === St.Held || f.st === St.Stomp) return false;
-  if (id === SP.Beam || id === SP.Shield || id === SP.Ultimate) return f.z === 0 && f.st !== St.Beam;
+  if (id === SP.Beam) return f.z === 0 && f.st !== St.Beam && f.st !== St.Barrage && f.st !== St.Tatsu;
+  if (id === SP.Shield) return f.z === 0 && f.st !== St.Beam;
   return true;
 }
 
@@ -899,10 +957,8 @@ function triggerSpecial(w: World, f: Fighter, id: number) {
       f.vy = 0;
       if (f.st === St.Run || f.st === St.Walk) setSt(f, St.Idle);
       break;
-    case SP.Ultimate:
-      // every cooldown is wiped, then everything fires at once
-      f.sp.fill(0);
-      for (const k of [SP.Beam, SP.Volley, SP.Halo, SP.Aura, SP.Shield]) triggerSpecial(w, f, k);
+    case SP.Thunder:
+      f.storm = THUNDER.dur;
       break;
   }
   f.sp[id] = SPECIALS[id].cooldown;
@@ -919,6 +975,7 @@ function updateMeter(f: Fighter) {
   if (f.volley > 0) frac = Math.max(frac, f.volley / VOLLEY.shots);
   if (f.aura > 0) frac = Math.max(frac, f.aura / AURA.dur);
   if (f.shield > 0) frac = Math.max(frac, f.shield / SHIELD.dur);
+  if (f.storm > 0) frac = Math.max(frac, f.storm / THUNDER.dur);
   if (frac >= 0) {
     f.mp = Math.round(MP_MAX * frac);
     f.spOn = 1;
@@ -973,6 +1030,7 @@ function updateShots(w: World) {
       const dir = s.vx >= 0 ? 1 : -1;
       const mul = slotMul(w, s.owner - 1);
       if (s.kind === 1) hit(w, t, s.owner - 1, Math.round(VOLLEY.dmg * mul), 2.2, true, 2.4, dir);
+      else if (s.kind === 3) hit(w, t, s.owner - 1, Math.round(GATLING.dmg * mul), GATLING.kbx, false, 0, dir, true);
       else hit(w, t, s.owner - 1, Math.round(BULLET.dmg * mul), BULLET.kbx, false, 0, dir);
       s.life = 0;
       break;
@@ -1000,26 +1058,89 @@ function updateBeam(w: World, f: Fighter) {
     if (rx < 4 || rx > BEAM.len + 10) continue;
     if (Math.abs(t.y - f.y) > BEAM.halfDepth) continue;
     if (Math.abs(t.z - f.z - 14) > 30) continue;
-    if (t.holding) dropHeld(w, t);
-    t.hp = Math.max(0, t.hp - dmg);
-    t.lastSlot = f.slot;
-    t.pend = 0;
-    t.pendT = 0;
-    if (t.hp <= 0) {
-      setSt(t, St.Down);
-      t.vz = 2.4;
-      t.vx = f.face * 2;
-      t.vy = 0;
-      t.combo = 0;
-      w.ev.push([t.x, t.y, t.z + 14, 1]);
-    } else {
-      if (t.st !== St.Hurt) setSt(t, St.Hurt);
-      t.t = 0;
-      t.stun = 12;
-      t.vx = 0;
-      t.vy = 0;
-      w.ev.push([t.x, t.y, t.z + 14, 0]);
-    }
+    pinHit(w, t, f.slot, dmg, f.face);
+  }
+}
+
+/** Damage that keeps the target pinned in place (beam, lightning): no knockback unless it is the killing blow. */
+function pinHit(w: World, t: Fighter, srcSlot: number, dmg: number, dir: number) {
+  if (t.holding) dropHeld(w, t);
+  t.hp = Math.max(0, t.hp - dmg);
+  t.lastSlot = srcSlot;
+  t.pend = 0;
+  t.pendT = 0;
+  if (t.hp <= 0) {
+    setSt(t, St.Down);
+    t.vz = 2.4;
+    t.vx = dir * 2;
+    t.vy = 0;
+    t.combo = 0;
+    w.ev.push([t.x, t.y, t.z + 14, 1]);
+  } else {
+    if (t.st !== St.Hurt) setSt(t, St.Hurt);
+    t.t = 0;
+    t.stun = 12;
+    t.vx = 0;
+    t.vy = 0;
+    w.ev.push([t.x, t.y, t.z + 14, 0]);
+  }
+}
+
+/** 龍捲風腳: rise a little, hover and drift forward while spinning, then drop. */
+function updateTatsu(f: Fighter) {
+  const t = f.t;
+  f.vy = 0;
+  f.vz = 0;
+  f.vx = t >= TATSU.rise - 2 && t < TATSU.total - TATSU.fall ? f.face * TATSU.speed : 0;
+  if (t < TATSU.rise) f.z = (TATSU.height * t) / TATSU.rise;
+  else if (t < TATSU.total - TATSU.fall) f.z = TATSU.height;
+  else f.z = Math.max(0, (TATSU.height * (TATSU.total - t)) / TATSU.fall);
+  if (t >= TATSU.total) {
+    f.z = 0;
+    f.vx = 0;
+    setSt(f, St.Idle);
+  }
+}
+
+/** 加特靈: the barrel cools while the trigger is released, and a jammed gun rests until it is ready. */
+function tickHeat(w: World, f: Fighter) {
+  if (f.heatCd > 0) {
+    if (--f.heatCd === 0) f.heat = 0;
+  } else if (f.heat > 0 && !(f.st === St.Shoot && f.weapon === WID.Gatling) && w.tick % GATLING.cool === 0) f.heat--;
+}
+
+function fireGatling(w: World, f: Fighter) {
+  if (f.heatCd > 0 || f.wn <= 0) return;
+  w.shots.push({ id: w.nextId++, kind: 3, x: f.x + f.face * GATLING.muzzleX, y: f.y, z: f.z + GATLING.muzzleZ, vx: f.face * GATLING.speed, owner: f.slot + 1, life: GATLING.life });
+  f.wn--;
+  if (++f.heat >= GATLING.overheat) f.heatCd = GATLING.rest;
+  if (f.wn <= 0) {
+    breakWeapon(w, f);
+    setSt(f, St.Idle);
+  }
+}
+
+/** 天雷萬鈞: a bolt every few ticks, mostly aimed at an enemy on screen, otherwise anywhere on the ground. */
+function tickStorm(w: World, f: Fighter) {
+  f.storm--;
+  if ((THUNDER.dur - f.storm) % THUNDER.gap !== 0) return;
+  const foes = w.fighters.filter((t) => !isPlayer(t) && t.st !== St.Dead && t.x > w.cam - 20 && t.x < w.cam + SCREEN_W + 20);
+  let sx: number;
+  let sy: number;
+  if (foes.length && rand(w) < THUNDER.aimed) {
+    const t = foes[Math.floor(rand(w) * foes.length)];
+    sx = t.x;
+    sy = t.y;
+  } else {
+    sx = w.cam + 8 + rand(w) * (SCREEN_W - 16);
+    sy = GROUND_MIN + rand(w) * (GROUND_MAX - GROUND_MIN);
+  }
+  w.ev.push([sx, sy, 0, 4]);
+  const dmg = Math.max(1, Math.round(THUNDER.dmg * DEFS[f.def].dmg * (f.aura > 0 ? AURA.mult : 1)));
+  for (const t of w.fighters) {
+    if (isPlayer(t) || t.heldBy || t.st === St.Down || t.st === St.GetUp || t.st === St.Dead) continue;
+    if (Math.abs(t.x - sx) > THUNDER.radius || Math.abs(t.y - sy) > 10) continue;
+    pinHit(w, t, f.slot, dmg, t.x >= sx ? 1 : -1);
   }
 }
 
@@ -1174,7 +1295,8 @@ export function snapshot(w: World): Snapshot {
       e: Math.round(f.mp),
       n: f.wn,
       c: f.cast,
-      b: (f.aura > 0 ? 1 : 0) | (f.shield > 0 ? 2 : 0) | (f.halo > 0 ? 4 : 0) | ((f.aura > 0 && f.aura < 120) || (f.shield > 0 && f.shield < 120) ? 8 : 0),
+      ht: f.heatCd > 0 ? 500 + Math.ceil(f.heatCd / 60) : f.heat,
+      b: (f.storm > 0 ? 16 : 0) | (f.aura > 0 ? 1 : 0) | (f.shield > 0 ? 2 : 0) | (f.halo > 0 ? 4 : 0) | ((f.aura > 0 && f.aura < 120) || (f.shield > 0 && f.shield < 120) ? 8 : 0),
       k: f.kind === 'player' ? f.sp.slice() : [],
     })),
     it: w.items.map((i) => ({ i: i.id, k: i.kind, x: r1(i.x), y: r1(i.y), z: r1(i.z) })),

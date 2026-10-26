@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Btn } from '../src/shared/constants';
 import { addPlayer, createWorld, snapshot, step } from '../src/shared/sim';
-import { AURA, BEAM, MP_MAX, SHIELD, SP, SPECIALS, VOLLEY } from '../src/shared/specials';
+import { AURA, BARRAGE, BEAM, ENEMY_HALO, MP_MAX, SHIELD, SP, SPECIALS, TATSU, THUNDER, VOLLEY } from '../src/shared/specials';
 import { St, type Fighter, type PlayerInput, type World } from '../src/shared/types';
-import { ITEM_1UP, ITEM_TONIC, WEAPONS, WID } from '../src/shared/weapons';
+import { GATLING, ITEM_1UP, ITEM_TONIC, WEAPONS, WID } from '../src/shared/weapons';
 import { DEFS } from '../src/shared/defs';
 import { STAGE } from '../src/shared/stage';
 
@@ -98,6 +98,7 @@ describe('beam special', () => {
     const p = player(w);
     p.face = 1;
     const near = foe(w, 60, 0, 'saburo', 'grunt', 200);
+    near.sp[SP.Halo] = 99999; // measure the beam alone, no self-healing
     const off = foe(w, 60, 30, 'saburo', 'grunt', 200);
     const x0 = p.x;
     press(w, Btn.S1);
@@ -211,13 +212,35 @@ describe('weapons', () => {
     expect(e2.hp).toBeLessThan(100);
   });
 
-  it('a blade cannot be thrown: B swings it instead', () => {
+  it('B throws away whatever is held, so another weapon can be picked up', () => {
+    for (const id of [WID.Stick, WID.Bamboo, WID.Stone, WID.Saber, WID.Rifle, WID.Gatling]) {
+      const w = setup();
+      const p = give(w, id, 7);
+      press(w, Btn.B);
+      run(w, 30);
+      expect(p.weapon).toBe(0);
+      const it = w.items.find((i) => i.kind === id)!;
+      expect(it.n).toBe(7);
+      expect(it.z).toBe(0);
+    }
     const w = setup();
     const p = give(w, WID.Saber);
     press(w, Btn.B);
-    run(w, 4);
-    expect(p.weapon).toBe(WID.Saber);
-    expect(w.items.length).toBe(0);
+    run(w, 30);
+    w.items.push({ id: w.nextId++, kind: WID.Bamboo, x: p.x + 4, y: p.y, z: 0, vx: 0, vy: 0, vz: 0, owner: 0, n: 9 });
+    press(w, Btn.A);
+    run(w, 14);
+    expect(p.weapon).toBe(WID.Bamboo);
+    expect(p.wn).toBe(9);
+  });
+
+  it('a thrown blade or gun only lands; it does not hurt', () => {
+    const w = setup();
+    give(w, WID.Saber);
+    const e = foe(w, 30, 0, 'saburo', 'grunt', 100);
+    press(w, Btn.B);
+    run(w, 40);
+    expect(e.hp).toBe(100);
   });
 
   it('rifle: A shoots, spends ammo, hits at range, and the empty gun disappears', () => {
@@ -242,14 +265,14 @@ describe('weapons', () => {
     expect(p.wn).toBeLessThanOrEqual(30 - 4);
   });
 
-  it('rifle: B bashes in melee without using ammo', () => {
+  it('rifle: an empty magazine still bashes with A', () => {
     const w = setup();
-    const p = give(w, WID.Rifle, 10);
+    const p = give(w, WID.Rifle, 0);
     const e = foe(w, 18, 0, 'saburo', 'grunt', 100);
-    press(w, Btn.B);
+    press(w, Btn.A);
     run(w, 24);
     expect(e.hp).toBeLessThan(100);
-    expect(p.wn).toBe(10);
+    expect(p.wn).toBe(0);
   });
 });
 
@@ -283,7 +306,7 @@ describe('drops', () => {
       for (let i = 0; i < 4; i++) step(w, [none, undefined]);
       for (const it of w.items) if (it.kind !== ITEM_TONIC) seen.add(it.kind);
     }
-    expect([...seen].sort()).toEqual([WID.Stick, WID.Bamboo, WID.Stone, WID.Saber, WID.Rifle]);
+    expect([...seen].sort()).toEqual([WID.Stick, WID.Bamboo, WID.Stone, WID.Saber, WID.Rifle, WID.Gatling]);
   });
 
   it('grunts sometimes drop a weapon', () => {
@@ -419,7 +442,7 @@ describe('special buttons', () => {
   });
 });
 
-describe('光環 / 爆氣 / 聖盾 / 主角威能', () => {
+describe('光環 / 爆氣 / 聖盾', () => {
   const trigger = (w: World, bit: number) => {
     press(w, bit);
   };
@@ -491,21 +514,6 @@ describe('光環 / 爆氣 / 聖盾 / 主角威能', () => {
     const x1 = p.x;
     run(w, 30, { held: Btn.Right, pressed: 0 });
     expect(p.x).toBeGreaterThan(x1);
-  });
-
-  it('主角威能 wipes the cooldowns and fires everything at once', () => {
-    const w = setup();
-    const p = player(w);
-    p.hp = 20;
-    p.sp = [900, 900, 900, 900, 900, 0];
-    p.face = 1;
-    trigger(w, Btn.S6);
-    expect(p.hp).toBe(p.maxHp);
-    expect(p.st).toBe(St.Beam);
-    expect(p.volley).toBeGreaterThan(0);
-    expect(p.aura).toBeGreaterThan(0);
-    expect(p.shield).toBeGreaterThan(0);
-    for (const s of SPECIALS) expect(p.sp[s.id]).toBe(s.cooldown);
   });
 
   it('shows the buffs and cooldowns in the snapshot', () => {
@@ -774,5 +782,276 @@ describe('tonic', () => {
     expect(w.lap).toBe(1);
     expect(p.maxHp).toBe(120);
     expect(p.mpMax).toBe(120);
+  });
+});
+
+describe('enemy 光環', () => {
+  it('a hurt enemy heals itself with holy light, then has to wait', () => {
+    const w = setup(7);
+    const e = foe(w, 200, 0, 'bushi', 'grunt', 100);
+    e.aiT = 0;
+    e.hp = 30;
+    let healed = -1;
+    for (let i = 0; i < 600 && healed < 0; i++) {
+      run(w, 1);
+      if (e.halo > 0) healed = i;
+    }
+    expect(healed).toBeGreaterThanOrEqual(0);
+    expect(e.hp).toBe(30 + Math.ceil(100 * ENEMY_HALO.heal));
+    expect(snapshot(w).f.find((f) => f.i === e.id)!.b & 4).toBe(4);
+    // hurt again right away: no second heal until the cooldown is over
+    e.hp = 10;
+    run(w, ENEMY_HALO.cooldown - 60);
+    expect(e.hp).toBe(10);
+    run(w, 600);
+    expect(e.hp).toBeGreaterThan(10);
+  });
+
+  it('a healthy enemy never does it', () => {
+    const w = setup(7);
+    const e = foe(w, 200, 0, 'bushi', 'grunt', 100);
+    e.aiT = 0;
+    e.hp = 70;
+    run(w, 1200);
+    expect(e.halo).toBe(0);
+    expect(e.hp).toBe(70);
+  });
+
+  it('does not heal an enemy that is knocked down or being hurt', () => {
+    const w = setup(7);
+    const e = foe(w, 200, 0, 'bushi', 'grunt', 100);
+    e.hp = 20;
+    e.st = St.Hurt;
+    e.t = 0;
+    e.stun = 400;
+    run(w, 100);
+    expect(e.halo).toBe(0);
+    expect(e.hp).toBe(20);
+  });
+});
+
+// ---------- gatling ----------
+
+describe('手持式加特靈機關槍', () => {
+  const spray = (w: World, n: number) => run(w, n, { held: Btn.A, pressed: 0 });
+
+  it('has 1000 rounds and fires every few ticks while A is held', () => {
+    expect(WEAPONS[WID.Gatling].uses).toBe(1000);
+    const w = setup();
+    const p = give(w, WID.Gatling);
+    press(w, Btn.A);
+    spray(w, 60);
+    const used = 1000 - p.wn;
+    expect(used).toBeGreaterThanOrEqual(15);
+    expect(used).toBeLessThanOrEqual(25);
+    expect(p.heat).toBe(used);
+    run(w, 10);
+    expect(p.st).toBe(St.Idle);
+    expect(p.weapon).toBe(WID.Gatling);
+  });
+
+  it('its bullets pin an enemy in place and wear it down', () => {
+    const w = setup();
+    give(w, WID.Gatling);
+    const e = foe(w, 100, 0, 'saburo', 'grunt', 9999);
+    press(w, Btn.A);
+    spray(w, 120);
+    expect(e.hp).toBeLessThan(9999 - 6 * 4);
+    expect(e.st).toBe(St.Hurt);
+  });
+
+  it('the barrel glows from 300 shots on and jams at 500 for ten seconds', () => {
+    const w = setup();
+    const p = give(w, WID.Gatling);
+    press(w, Btn.A);
+    let reportedRed = false;
+    let guard = 0;
+    while (p.heatCd === 0 && guard++ < 3000) {
+      spray(w, 1);
+      const ht = snapshot(w).f.find((f) => f.i === p.id)!.ht;
+      if (p.heat >= GATLING.red) reportedRed = reportedRed || ht >= GATLING.red;
+      if (p.heat < GATLING.red) expect(ht).toBeLessThan(GATLING.red);
+    }
+    expect(reportedRed).toBe(true);
+    expect(p.heat).toBe(GATLING.overheat);
+    expect(p.heatCd).toBe(GATLING.rest);
+    expect(1000 - p.wn).toBe(GATLING.overheat);
+    expect(snapshot(w).f.find((f) => f.i === p.id)!.ht).toBe(510);
+    // still jammed: holding A does nothing
+    spray(w, 300);
+    expect(1000 - p.wn).toBe(GATLING.overheat);
+    expect(p.st).not.toBe(St.Shoot);
+    // ten seconds later it is cool and fires again
+    run(w, GATLING.rest);
+    expect(p.heat).toBe(0);
+    press(w, Btn.A);
+    spray(w, 20);
+    expect(1000 - p.wn).toBeGreaterThan(GATLING.overheat);
+  });
+
+  it('cools down while the trigger is released', () => {
+    const w = setup();
+    const p = give(w, WID.Gatling);
+    p.heat = 200;
+    run(w, 400);
+    expect(p.heat).toBe(100);
+    run(w, 1000);
+    expect(p.heat).toBe(0);
+  });
+
+  it('the empty gun disappears', () => {
+    const w = setup();
+    const p = give(w, WID.Gatling, 3);
+    press(w, Btn.A);
+    spray(w, 30);
+    expect(p.weapon).toBe(0);
+    expect(p.wn).toBe(0);
+  });
+});
+
+// ---------- 百裂拳 / 龍捲風腳 ----------
+
+describe('run + A / B with empty hands', () => {
+  const runAnd = (w: World, btn: number) => {
+    const p = player(w);
+    p.face = 1;
+    run(w, 3, { held: Btn.Right, pressed: 0 });
+    p.st = St.Run;
+    p.vx = 2;
+    press(w, btn, Btn.Right);
+    run(w, 6, { held: Btn.Right, pressed: 0 });
+    return p;
+  };
+
+  it('A starts 百裂拳: twenty punches that cannot be interrupted', () => {
+    const w = setup();
+    const p = runAnd(w, Btn.A);
+    expect(p.st).toBe(St.Barrage);
+    const e = foe(w, 14, 0, 'saburo', 'grunt', 9999);
+    e.face = -1;
+    let flying = false;
+    for (let i = 0; i < 100; i++) {
+      run(w, 1);
+      if (e.st === St.Down) flying = true;
+      if (!flying) expect(e.st === St.Hurt || e.st === St.Idle).toBe(true);
+    }
+    // 20 punches of 3
+    expect(9999 - e.hp).toBe(BARRAGE.punches * 3);
+    expect(flying).toBe(true);
+    expect(p.st).toBe(St.Idle);
+  });
+
+  it('enemies cannot knock the hero out of it', () => {
+    const w = setup();
+    const p = runAnd(w, Btn.A);
+    p.inv = 0;
+    const e = foe(w, -14, 0, 'bushi', 'grunt', 9999);
+    e.face = 1;
+    e.aiT = 0;
+    e.cd = 0;
+    let hurt = false;
+    for (let i = 0; i < 60; i++) {
+      run(w, 1);
+      if (p.st === St.Hurt || p.st === St.Down) hurt = true;
+    }
+    expect(hurt).toBe(false);
+    expect(p.hp).toBeLessThan(p.maxHp);
+  });
+
+  it('B starts 龍捲風腳: hovers, hits both sides several times, then lands', () => {
+    const w = setup();
+    const p = runAnd(w, Btn.B);
+    expect(p.st).toBe(St.Tatsu);
+    const front = foe(w, 18, 0, 'saburo', 'grunt', 9999);
+    const back = foe(w, -18, 0, 'saburo', 'grunt', 9999);
+    front.face = back.face = 1;
+    front.z = back.z = 0; // foe() copies the hero, who is in the air
+    front.vz = back.vz = 0;
+    front.st = back.st = St.Idle;
+    front.t = back.t = 0;
+    let maxZ = 0;
+    const x0 = p.x;
+    for (let i = 0; i < TATSU.total + 10; i++) {
+      run(w, 1);
+      maxZ = Math.max(maxZ, p.z);
+    }
+    expect(maxZ).toBeGreaterThan(8);
+    expect(p.z).toBe(0);
+    expect(p.st).toBe(St.Idle);
+    expect(p.x).toBeGreaterThan(x0);
+    expect(front.hp).toBeLessThan(9999 - 3 * 5);
+    // the one behind is only in reach until the hero has drifted away
+    expect(back.hp).toBeLessThan(9999);
+  });
+
+  it('is not triggered with a weapon in hand', () => {
+    for (const btn of [Btn.A, Btn.B]) {
+      const w = setup();
+      give(w, WID.Saber);
+      const p = runAnd(w, btn);
+      expect([St.Barrage, St.Tatsu]).not.toContain(p.st);
+    }
+  });
+
+  it('is not triggered from standing still: that is the normal punch and kick', () => {
+    const w = setup();
+    const p = player(w);
+    press(w, Btn.A);
+    run(w, 4);
+    expect(p.st).toBe(St.Punch);
+  });
+});
+
+// ---------- 天雷萬鈞 ----------
+
+describe('天雷萬鈞 (special 6)', () => {
+  it('rains lightning for ten seconds over the whole battlefield', () => {
+    const w = setup(3);
+    const p = player(w);
+    const foes = [foe(w, 60, 0, 'saburo', 'grunt', 600), foe(w, 150, 25, 'bushi', 'grunt', 600), foe(w, 100, -20, 'ninja', 'grunt', 600)];
+    for (const f of foes) f.sp[SP.Halo] = 99999;
+    press(w, Btn.S6);
+    expect(p.storm).toBeGreaterThan(0);
+    expect(p.sp[SP.Thunder]).toBe(SPECIALS[SP.Thunder].cooldown);
+    expect(snapshot(w).f.find((f) => f.i === p.id)!.b & 16).toBe(16);
+    let strikes = 0;
+    for (let i = 0; i < THUNDER.dur + 10; i++) {
+      run(w, 1);
+      for (const ev of w.ev) if (ev[3] === 4) strikes++;
+      w.ev.length = 0;
+    }
+    expect(strikes).toBe(THUNDER.dur / THUNDER.gap);
+    expect(p.storm).toBe(0);
+    for (const f of foes) expect(f.hp).toBeLessThan(600);
+    expect(p.hp).toBe(p.maxHp);
+  });
+
+  it('keeps the hero free to move and fight while it rains', () => {
+    const w = setup();
+    const p = player(w);
+    press(w, Btn.S6);
+    const x0 = p.x;
+    run(w, 30, { held: Btn.Right, pressed: 0 });
+    expect(p.x).toBeGreaterThan(x0);
+  });
+
+  it('can be cast together with the other specials, and does not wipe their cooldowns', () => {
+    const w = setup();
+    const p = player(w);
+    p.sp[SP.Aura] = 300;
+    press(w, Btn.S6);
+    expect(p.sp[SP.Aura]).toBeGreaterThan(250);
+    expect(p.aura).toBe(0);
+  });
+
+  it('only hits enemies, and ends when the hero falls', () => {
+    const w = setup();
+    const p = player(w);
+    press(w, Btn.S6);
+    p.hp = 0;
+    p.st = St.Down;
+    p.t = 44;
+    run(w, 5);
+    expect(p.storm).toBe(0);
   });
 });

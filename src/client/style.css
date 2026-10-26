@@ -232,9 +232,9 @@ input {
   --c1: #8fc0ff;
   --c2: #2a4fa8;
 }
-#specials .sp-ultimate {
-  --c1: #ff8ae0;
-  --c2: #8a2aa8;
+#specials .sp-thunder {
+  --c1: #b4a8ff;
+  --c2: #3a2a9a;
 }
 #btns {
   display: flex;

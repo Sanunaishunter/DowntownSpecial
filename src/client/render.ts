@@ -2,7 +2,7 @@ import { SCREEN_H, SCREEN_W, STAGE_W } from '../shared/constants';
 import { DEFS } from '../shared/defs';
 import { BEAM, HALO, MP_MAX, SPECIALS } from '../shared/specials';
 import { St, type GameEvent, type SnapFighter, type SnapItem, type Snapshot } from '../shared/types';
-import { ITEM_1UP, ITEM_TONIC, UNLIMITED, WEAPONS, WID } from '../shared/weapons';
+import { GATLING, ITEM_1UP, ITEM_TONIC, UNLIMITED, WEAPONS, WID } from '../shared/weapons';
 import type { Assets } from './assets';
 import { PixelSprites } from './pixelart';
 
@@ -66,6 +66,19 @@ export class Renderer {
     tintForTime(ctx, cam);
     if (!snap) return;
 
+    // 天雷萬鈞: the whole picture darkens while the storm lasts and flashes white on every strike
+    if (snap.f.some((f) => f.b & 16)) {
+      ctx.fillStyle = 'rgba(24,16,64,0.3)';
+      ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+    }
+    for (const e of this.fx) {
+      const age = o.now - e.t0;
+      if (e.k === 4 && age < 90) {
+        ctx.fillStyle = `rgba(255,255,255,${0.32 * (1 - age / 90)})`;
+        ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+      }
+    }
+
     for (const it of snap.it) drawItem(ctx, it, cam, o.now);
 
     const fs = [...snap.f].sort((a, b) => a.y - b.y);
@@ -73,8 +86,11 @@ export class Renderer {
     for (const f of fs) if (f.s === St.Beam) drawBeam(ctx, f, cam, o.now);
     for (const s of snap.sh) drawShot(ctx, s, cam, o.now);
 
-    this.fx = this.fx.filter((e) => o.now - e.t0 < 200);
-    for (const e of this.fx) drawSpark(ctx, e, cam, (o.now - e.t0) / 200);
+    this.fx = this.fx.filter((e) => o.now - e.t0 < (e.k === 4 ? 280 : 200));
+    for (const e of this.fx) {
+      if (e.k === 4) drawBolt(ctx, e, cam, (o.now - e.t0) / 280);
+      else drawSpark(ctx, e, cam, (o.now - e.t0) / 200);
+    }
 
     drawHud(ctx, snap, o);
 
@@ -116,11 +132,18 @@ export class Renderer {
     const shieldMs = since('shield', !!(f.b & 2));
     if (f.b & 4) drawHaloLight(ctx, ox, oy, haloMs, (HALO.vis / 60) * 1000, f.i);
     if (f.b & 1) this.drawAura(f, ox, oy, now, auraMs);
+    const tatsu = f.s === St.Tatsu;
+    if (tatsu) drawTornado(ctx, ox, oy - Math.round(f.z), f.t, true);
     ctx.save();
     ctx.translate(ox, oy - Math.round(f.z));
-    ctx.scale(f.r, 1);
+    // 龍捲風腳: the body spins around its own axis, which on a flat sprite is a quick flip
+    const spin = tatsu ? Math.cos(f.t * 0.95) : 1;
+    ctx.scale(f.r * (tatsu ? (Math.abs(spin) < 0.25 ? 0.25 * Math.sign(spin || 1) : spin) : 1), 1);
     this.paint(ctx, f);
     ctx.restore();
+    if (tatsu) drawTornado(ctx, ox, oy - Math.round(f.z), f.t, false);
+    if (f.s === St.Barrage) drawBarrage(ctx, ox, oy - Math.round(f.z), f.r, f.t);
+    if (f.w === WID.Gatling && f.ht > GATLING.overheat) drawSteam(ctx, ox + f.r * 38, oy - Math.round(f.z) - 21, now);
     if (f.b & 2) drawShield(ctx, ox + f.r * 15, oy - Math.round(f.z), shieldMs, now, !!(f.b & 8));
   }
 
@@ -290,6 +313,8 @@ function shadow(ctx: CanvasRenderingContext2D, x: number, y: number, z: number, 
 function artFor(f: SnapFighter, hasArt: boolean): { weapon: number; anim?: string; t: number } {
   if (f.s === St.Down && f.z > 0) return { weapon: 0, anim: 'fly', t: f.t };
   if (f.s === St.Beam) return { weapon: 0, anim: f.t >= BEAM.charge + BEAM.fire ? 'beamend' : 'beam', t: f.t };
+  if (f.s === St.Barrage) return { weapon: 0, anim: 'punch', t: f.t % 12 };
+  if (f.s === St.Tatsu) return { weapon: 0, anim: 'kick', t: 7 };
   if ((f.s === St.Idle || f.s === St.Walk || f.s === St.Run) && f.c > 0) return { weapon: 0, anim: 'cast', t: 0 };
   if (!f.w) return { weapon: 0, t: f.t };
   if (f.w === WID.Stick || hasArt) return { weapon: f.w, t: f.t };
@@ -308,7 +333,7 @@ function artFor(f: SnapFighter, hasArt: boolean): { weapon: number; anim?: strin
 }
 
 // Draws a weapon pointing along +x with the grip at the origin.
-function weaponGfx(ctx: CanvasRenderingContext2D, kind: number) {
+function weaponGfx(ctx: CanvasRenderingContext2D, kind: number, heat = 0, spin = 0) {
   const R = (c: string, x: number, y: number, w: number, h: number) => {
     ctx.fillStyle = c;
     ctx.fillRect(x, y, w, h);
@@ -356,6 +381,31 @@ function weaponGfx(ctx: CanvasRenderingContext2D, kind: number) {
       R('#7a4a20', 14, 0, 7, 2);
       R('#2c2c32', 6, 2, 3, 6);
       break;
+    case WID.Gatling: {
+      // heat: 0..500 (501+ = jammed). The barrels start to glow at 300 and are white-red at the limit.
+      const k = Math.max(0, Math.min(1, (heat - GATLING.red) / (GATLING.overheat - GATLING.red)));
+      const glow = heat > GATLING.overheat ? 1 : k;
+      const barrel = glow > 0 ? `rgb(${Math.round(70 + 185 * glow)},${Math.round(70 - 40 * glow)},${Math.round(80 - 60 * glow)})` : '#4c4c56';
+      R('#6a3c18', -9, -1, 8, 5);
+      R('#2c2c32', -2, -3, 14, 7);
+      R('#4c4c56', -2, -3, 14, 1);
+      R('#3a5a2a', 3, 4, 9, 6);
+      R('#26401c', 3, 4, 9, 1);
+      R('#2c2c32', 11, -4, 3, 9);
+      // six barrels seen from the side: alternate stripes turn while it fires
+      R('#1c1c22', 14, -4, 17, 9);
+      for (let i = 0; i < 4; i++) R(i === ((spin >> 1) & 3) ? '#8a8a96' : barrel, 14, -4 + i * 2 + 1, 17, 1);
+      R(barrel, 14, -3, 17, 2);
+      R(barrel, 14, 0, 17, 2);
+      R(barrel, 14, 3, 17, 1);
+      R('#1c1c22', 29, -4, 3, 9);
+      if (glow > 0) {
+        ctx.fillStyle = `rgba(255,${Math.round(120 - 80 * glow)},40,${0.15 + 0.3 * glow})`;
+        ctx.fillRect(12, -6, 21, 13);
+      }
+      R('#2c2c32', -1, -5, 6, 2);
+      break;
+    }
     default:
       break;
   }
@@ -375,8 +425,15 @@ function drawWeaponInHand(ctx: CanvasRenderingContext2D, f: SnapFighter) {
   } else if (f.s === St.Shoot) {
     ctx.translate(9, -22);
     ctx.rotate(-0.05);
-    weaponGfx(ctx, k);
-    if (f.t >= 2 && f.t <= 5) {
+    weaponGfx(ctx, k, f.ht, f.t);
+    if (k === WID.Gatling && f.ht <= GATLING.overheat) {
+      if (f.t % 3 !== 0) {
+        ctx.fillStyle = '#fff2a0';
+        ctx.fillRect(32, -4, 7, 8);
+        ctx.fillStyle = '#ff9a30';
+        ctx.fillRect(36, -2, 7, 4);
+      }
+    } else if (f.t >= 2 && f.t <= 5) {
       ctx.fillStyle = '#fff2a0';
       ctx.fillRect(25, -4, 6, 7);
       ctx.fillStyle = '#ff9a30';
@@ -385,10 +442,10 @@ function drawWeaponInHand(ctx: CanvasRenderingContext2D, f: SnapFighter) {
   } else if (k === WID.Stone) {
     ctx.translate(-4, -49);
     weaponGfx(ctx, k);
-  } else if (k === WID.Rifle) {
+  } else if (k === WID.Rifle || k === WID.Gatling) {
     ctx.translate(8, -21);
     ctx.rotate(-0.08);
-    weaponGfx(ctx, k);
+    weaponGfx(ctx, k, f.ht);
   } else {
     ctx.translate(11, -19);
     ctx.rotate(-Math.PI / 2 + 0.1);
@@ -459,6 +516,13 @@ function drawTonic(ctx: CanvasRenderingContext2D, x: number, y: number, now: num
 function drawShot(ctx: CanvasRenderingContext2D, s: { k: number; x: number; y: number; z: number; r: 1 | -1 }, cam: number, now: number) {
   const sx = Math.round(s.x - cam);
   const sy = Math.round(s.y - s.z);
+  if (s.k === 3) {
+    ctx.fillStyle = 'rgba(255,190,70,0.5)';
+    ctx.fillRect(s.r > 0 ? sx - 12 : sx + 4, sy, 9, 1);
+    ctx.fillStyle = '#fffbd0';
+    ctx.fillRect(s.r > 0 ? sx - 5 : sx, sy, 6, 1);
+    return;
+  }
   if (s.k === 2) {
     const cross = Math.floor(now / 45) % 2 === 0;
     ctx.fillStyle = '#10101a';
@@ -573,6 +637,90 @@ function drawHeldStick(ctx: CanvasRenderingContext2D, st: number, t: number) {
   if (st === St.Swing) ctx.fillRect(0, -2, 24, 1);
   else ctx.fillRect(0, -18, 1, 22);
   ctx.restore();
+}
+
+// 天雷萬鈞: a jagged bolt from the top of the screen down to the strike, then a burst on the ground.
+function drawBolt(ctx: CanvasRenderingContext2D, e: Fx, cam: number, k: number) {
+  const x = Math.round(e.x - cam);
+  const y = Math.round(e.y);
+  let seed = Math.floor(e.x * 7 + e.y * 13 + e.t0) % 9973;
+  const rnd = () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+  const pts: [number, number][] = [[x + (rnd() - 0.5) * 24, -4]];
+  const steps = 9;
+  for (let i = 1; i < steps; i++) pts.push([x + (rnd() - 0.5) * 22 * (1 - i / steps) , (y * i) / steps]);
+  pts.push([x, y]);
+  const a = Math.max(0, 1 - k);
+  ctx.lineJoin = 'round';
+  for (const [w, c] of [
+    [6, `rgba(120,110,255,${0.25 * a})`],
+    [3, `rgba(190,200,255,${0.6 * a})`],
+    [1, `rgba(255,255,255,${a})`],
+  ] as const) {
+    ctx.strokeStyle = c;
+    ctx.lineWidth = w;
+    ctx.beginPath();
+    pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+    ctx.stroke();
+  }
+  ctx.fillStyle = `rgba(210,220,255,${0.5 * a})`;
+  ctx.beginPath();
+  ctx.ellipse(x, y, 5 + 12 * k, 2 + 4 * k, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// 龍捲風腳: translucent wind rings around the spinning body (`back` = the half behind it).
+function drawTornado(ctx: CanvasRenderingContext2D, x: number, y: number, t: number, back: boolean) {
+  for (let i = 0; i < 3; i++) {
+    const yy = y - 6 - i * 11;
+    const rx = 15 + i * 3;
+    const ph = t * 0.55 + i * 1.7;
+    ctx.strokeStyle = `rgba(235,248,255,${0.55 - i * 0.1})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(x, yy, rx, 3.5, 0, ph + (back ? Math.PI : 0), ph + (back ? Math.PI * 2 : Math.PI));
+    ctx.stroke();
+  }
+  if (!back) {
+    ctx.fillStyle = 'rgba(210,235,255,0.5)';
+    for (let i = 0; i < 4; i++) {
+      const a = t * 0.7 + i * 1.6;
+      ctx.fillRect(Math.round(x + Math.cos(a) * 17), Math.round(y - 4 - ((t * 2 + i * 9) % 34)), 2, 2);
+    }
+  }
+}
+
+// 百裂拳: a cloud of fists flying out in front of the hero, with speed lines.
+function drawBarrage(ctx: CanvasRenderingContext2D, x: number, y: number, r: 1 | -1, t: number) {
+  for (let i = 0; i < 6; i++) {
+    const ph = (t * 3 + i * 7) % 20;
+    const fx = x + r * (12 + ph);
+    const fy = y - 30 + ((i * 17 + t * 5) % 22);
+    const a = 1 - ph / 26;
+    ctx.fillStyle = `rgba(255,255,255,${0.5 * a})`;
+    ctx.fillRect(r > 0 ? fx - 12 : fx + 4, fy + 1, 9, 1);
+    ctx.fillStyle = '#101010';
+    ctx.beginPath();
+    ctx.arc(fx, fy, 4.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#f0c090';
+    ctx.beginPath();
+    ctx.arc(fx, fy, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// Steam puffs from a jammed gatling.
+function drawSteam(ctx: CanvasRenderingContext2D, x: number, y: number, now: number) {
+  for (let i = 0; i < 4; i++) {
+    const p = ((now / 600 + i / 4) % 1);
+    ctx.fillStyle = `rgba(230,230,235,${0.55 * (1 - p)})`;
+    ctx.beginPath();
+    ctx.arc(x + Math.sin(p * 6 + i) * 3, y - p * 22, 2 + p * 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
 function drawSpark(ctx: CanvasRenderingContext2D, e: Fx, cam: number, k: number) {
@@ -733,7 +881,10 @@ function drawHud(ctx: CanvasRenderingContext2D, snap: Snapshot, o: DrawOpts) {
     text(ctx, `x${Math.max(0, s.l)}  ${String(s.p).padStart(6, '0')}`, x, 26, '#ffd070');
     if (f && f.w) {
       const wd = WEAPONS[f.w];
-      text(ctx, `${wd.name}${wd.uses < UNLIMITED ? ` ${f.n}` : ''}`, x, 35, '#bfe8ff');
+      const jammed = f.w === WID.Gatling && f.ht > GATLING.overheat;
+      const hot = f.w === WID.Gatling && f.ht >= GATLING.red;
+      const state = jammed ? `　過熱 ${f.ht - GATLING.overheat}s` : '';
+      text(ctx, `${wd.name}${wd.uses < UNLIMITED ? ` ${f.n}` : ''}${state}`, x, 35, jammed ? '#ff6a4a' : hot ? '#ffb070' : '#bfe8ff');
     }
   });
 

@@ -23,6 +23,8 @@ export const St = {
   Beam: 21,
   Shoot: 22,
   Land: 23,
+  Barrage: 24,
+  Tatsu: 25,
 } as const;
 
 export const ST_NAMES: string[] = [];
@@ -76,6 +78,11 @@ export interface Fighter {
   aura: number;
   shield: number;
   halo: number;
+  /** 天雷萬鈞 ticks left */
+  storm: number;
+  /** gatling: shots fired in this burst, and the rest ticks left once it has jammed */
+  heat: number;
+  heatCd: number;
   /** 1 while a timed special is running (drives the meter drain) */
   spOn: number;
 }
@@ -160,7 +167,9 @@ export interface SnapFighter {
   e: number;
   n: number;
   c: number;
-  /** buffs: 1 aura, 2 shield, 4 halo light, 8 a buff is about to end */
+  /** gatling barrel: 0..500 = heat, 501..510 = jammed with that many seconds left */
+  ht: number;
+  /** buffs: 1 aura, 2 shield, 4 halo light, 8 a buff is about to end, 16 lightning storm */
   b: number;
   /** cooldown ticks left per special (players only, empty for everyone else) */
   k: number[];

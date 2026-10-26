@@ -30,9 +30,9 @@ export const SKILL_ICONS: string[] = [
     '<path d="M12 1.5l9 3v8.2c0 5-3.7 8.6-9 10.3C6.7 21.3 3 17.7 3 12.7V4.5z" fill="#6aa8ff" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>' +
       '<path d="M12 4.5v15M6 11h12" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="11" r="2.8" fill="#ffd23a" stroke="#fff" stroke-width="1"/>',
   ),
-  // 主角威能: a burst star
+  // 天雷萬鈞: a storm cloud with a lightning bolt
   svg(
-    '<path d="M12 1l2.6 6.4 6.9-.9-4.2 5.5 4.2 5.5-6.9-.9L12 23l-2.6-6.4-6.9.9 4.2-5.5L2.5 6.5l6.9.9z" fill="#ff6bd6" stroke="#fff" stroke-width="1.3" stroke-linejoin="round"/>' +
-      '<circle cx="12" cy="12" r="4" fill="#fff"/><circle cx="12" cy="12" r="2" fill="#ffd23a"/>',
+    '<path d="M6.5 12.5a4.5 4.5 0 0 1 .8-8.8 5.5 5.5 0 0 1 10.5 1.2 4 4 0 0 1-.8 7.6z" fill="#8a86c8" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/>' +
+      '<path d="M13.5 9l-5 7.5h3.5l-2 6.5 7-9.5h-4.2l2.2-4.5z" fill="#ffe94a" stroke="#fff" stroke-width="0.9" stroke-linejoin="round"/>',
   ),
 ];

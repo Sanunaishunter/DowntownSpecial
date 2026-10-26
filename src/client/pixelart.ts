@@ -468,6 +468,8 @@ export function poseFor(st: number, t: number): { pose: string; frame: number } 
     case St.Hold: return { pose: 'hold', frame: (t >> 3) & 1 };
     case St.HoldSwing: return { pose: 'holdswing', frame: t < 6 ? 0 : t < 11 ? 1 : 2 };
     case St.Stomp: return { pose: 'stomp', frame: t < 5 ? 0 : 1 };
+    case St.Barrage: return { pose: 'punch', frame: t & 4 ? 1 : 2 };
+    case St.Tatsu: return { pose: 'kick', frame: 1 };
     default: return { pose: 'idle', frame: 0 };
   }
 }

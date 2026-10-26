@@ -1,4 +1,4 @@
-export const WID = { None: 0, Stick: 1, Bamboo: 2, Stone: 3, Saber: 4, Rifle: 5 } as const;
+export const WID = { None: 0, Stick: 1, Bamboo: 2, Stone: 3, Saber: 4, Rifle: 5, Gatling: 6 } as const;
 
 /** Item kind of the 1UP the general drops: picked up by walking over it, never held. */
 export const ITEM_1UP = 100;
@@ -33,7 +33,7 @@ export interface WeaponDef {
 /** The ninja's throwing star (shot kind 2, owner 0 = an enemy shot). */
 export const SHURIKEN = { speed: 3.2, life: 90, dmg: 6, kbx: 0.6, z: 20 };
 
-export const UNLIMITED = 999;
+export const UNLIMITED = 100000;
 
 export const WEAPONS: Record<number, WeaponDef> = {
   [WID.Stick]: {
@@ -61,6 +61,17 @@ export const WEAPONS: Record<number, WeaponDef> = {
     atk: { start: 4, active: 3, total: 16, dmg: 9, reach: 24, kbx: 1.5, knock: false, launch: 2.0, stun: 20 },
     throwable: false, throwDmg: 0, throwVx: 0, dropWeight: 20, bossWeight: 50,
   },
+  [WID.Gatling]: {
+    id: WID.Gatling, name: '加特靈機槍', mode: 'ranged', uses: 1000,
+    atk: { start: 5, active: 4, total: 20, dmg: 12, reach: 26, kbx: 1.5, knock: false, launch: 2.0, stun: 20 },
+    throwable: false, throwDmg: 0, throwVx: 0, dropWeight: 10, bossWeight: 50,
+  },
 };
+
+/**
+ * 手持式加特靈機關槍: hold A to spray. Every shot heats the barrel; at `red` shots in a row it glows red, at `overheat`
+ * it jams and has to rest `rest` ticks. The barrel cools by one every `cool` ticks while the trigger is released.
+ */
+export const GATLING = { gap: 3, red: 300, overheat: 500, rest: 600, cool: 4, dmg: 4, speed: 8, life: 34, kbx: 0.5, muzzleX: 26, muzzleZ: 20 };
 
 export const BULLET = { speed: 7, life: 40, dmg: 7, kbx: 0.8, muzzleX: 22, muzzleZ: 20 };
