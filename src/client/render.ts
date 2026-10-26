@@ -655,7 +655,7 @@ function drawHud(ctx: CanvasRenderingContext2D, snap: Snapshot, o: DrawOpts) {
         const px = x + 70 - (SPECIALS.length - n) * 7 + 1;
         ctx.fillStyle = '#000';
         ctx.fillRect(px - 1, 3, 6, 6);
-        ctx.fillStyle = f.k & (1 << n) ? '#30303c' : PIP_COLORS[n];
+        ctx.fillStyle = f.k[n] > 0 ? '#30303c' : PIP_COLORS[n];
         ctx.fillRect(px, 4, 4, 4);
       });
     }

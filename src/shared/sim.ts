@@ -1,6 +1,6 @@
 import { Btn, GRAVITY, GROUND_MAX, GROUND_MIN, JUMP_V, MAX_PLAYERS, SCREEN_W, SPECIAL_MASK, STAGE_W } from './constants';
 import { DEFS, PLAYER_DEFS } from './defs';
-import { AURA, BEAM, HALO, MP_MAX, MP_PER_HIT, MP_PER_KNOCKDOWN, SHIELD, SP, SPECIALS, VOLLEY } from './specials';
+import { AURA, BEAM, HALO, MP_MAX, SHIELD, SP, SPECIALS, VOLLEY } from './specials';
 import { STAGE, type WaveDef } from './stage';
 import { St, type Fighter, type PlayerInput, type Snapshot, type World } from './types';
 import { BULLET, SHURIKEN, UNLIMITED, WEAPONS, type AtkDef } from './weapons';
@@ -102,7 +102,6 @@ export function createWorld(seed = 1): World {
     locked: false,
     status: 0,
     statusT: 0,
-    manual: false,
     slots: Array.from({ length: MAX_PLAYERS }, () => ({ a: 0 as const, lives: 3, score: 0, fid: 0, rt: 0 })),
   };
 }
@@ -276,14 +275,8 @@ function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
   }
   if (f.cast > 0) f.cast--;
   if (f.volley > 0) tickVolley(w, f);
-  if (f.mp >= MP_MAX && canStartSpecial(f)) {
-    if (w.manual) {
-      const m = SPECIALS.find((s) => pressed & s.bit & SPECIAL_MASK);
-      if (m) triggerSpecial(w, f, m.id);
-    } else {
-      const id = pickSpecial(w, f);
-      if (id >= 0) triggerSpecial(w, f, id);
-    }
+  if (pressed & SPECIAL_MASK) {
+    for (const s of SPECIALS) if (pressed & s.bit && canStartSpecial(f, s.id)) triggerSpecial(w, f, s.id);
   }
   if (f.st === St.Shoot && f.t >= 9 && held & Btn.A && !(held & Btn.B) && f.wn > 0) setSt(f, St.Shoot);
   updateBody(w, f);
@@ -674,7 +667,7 @@ function die(w: World, f: Fighter) {
 
 // ---------- combat ----------
 
-function hit(w: World, t: Fighter, srcSlot: number, dmg: number, kbx: number, knock: boolean, launch: number, dir: number, gain = true) {
+function hit(w: World, t: Fighter, srcSlot: number, dmg: number, kbx: number, knock: boolean, launch: number, dir: number) {
   if (t.shield > 0 && isPlayer(t)) {
     // 聖盾: a third of the damage and no flinching, unless it would still be lethal
     dmg = Math.max(1, Math.round(dmg / (1 + SHIELD.def)));
@@ -693,7 +686,6 @@ function hit(w: World, t: Fighter, srcSlot: number, dmg: number, kbx: number, kn
   t.combo++;
   const down = t.hp <= 0 || knock || t.combo >= 3 || t.z > 0;
   t.face = dir > 0 ? -1 : 1;
-  if (gain && srcSlot >= 0) gainEnergy(w, srcSlot, MP_PER_HIT + (down ? MP_PER_KNOCKDOWN : 0));
   if (down) {
     if (t.weapon) {
       w.items.push({ id: w.nextId++, kind: t.weapon, x: t.x, y: t.y, z: t.z, vx: 0, vy: 0, vz: 0, owner: 0, n: t.wn });
@@ -746,7 +738,6 @@ function applyAttacks(w: World) {
         t.t = Math.min(t.t, 20);
         if (a.slot >= 0) t.lastSlot = a.slot;
         w.ev.push([t.x, t.y, 6, 0]);
-        if (a.slot >= 0) gainEnergy(w, a.slot, 3);
       } else {
         hit(w, t, a.slot, dmg, atk.kbx, atk.knock, atk.launch, a.face);
         if (a.st === St.Swing) useWeapon(w, a);
@@ -841,13 +832,6 @@ function dropOnDeath(w: World, f: Fighter) {
   w.items.push({ id: w.nextId++, kind: pick.id, x: f.x, y: f.y, z: 12, vx: 0, vy: 0, vz: 0.4, owner: 0, n: pick.uses });
 }
 
-function gainEnergy(w: World, slot: number, n: number) {
-  const s = w.slots[slot];
-  const p = s && s.a ? byId(w, s.fid) : undefined;
-  if (!p || specialActive(p)) return;
-  p.mp = Math.min(MP_MAX, p.mp + n);
-}
-
 function slotMul(w: World, slot: number) {
   const s = w.slots[slot];
   const p = s && s.a ? byId(w, s.fid) : undefined;
@@ -859,32 +843,21 @@ function specialActive(f: Fighter) {
   return f.st === St.Beam || f.volley > 0 || f.aura > 0 || f.shield > 0;
 }
 
-function canStartSpecial(f: Fighter) {
-  return f.hp > 0 && f.z === 0 && !f.holding && !specialActive(f) && (f.st === St.Idle || f.st === St.Walk || f.st === St.Run || f.st === St.Land);
-}
-
-/** Random pick among the specials that are not cooling down (-1 = none available yet). */
-function pickSpecial(w: World, f: Fighter): number {
-  const weights = SPECIALS.map((s) => {
-    if (f.sp[s.id] > 0) return 0;
-    // a heal at nearly full health is wasted, so it is much less likely then
-    return s.id === SP.Halo && f.hp > f.maxHp * 0.85 ? s.weight * 0.25 : s.weight;
-  });
-  const total = weights.reduce((a, b) => a + b, 0);
-  if (total <= 0) return -1;
-  let r = rand(w) * total;
-  for (let i = 0; i < weights.length; i++) {
-    if (r < weights[i]) return i;
-    r -= weights[i];
-  }
-  return weights.findIndex((x) => x > 0);
+/**
+ * A special can be used when it is off cooldown and the hero is on their feet. Beam, shield and the ultimate root the hero
+ * (or throw them into the beam), so those also need solid ground and no other beam running.
+ */
+function canStartSpecial(f: Fighter, id: number) {
+  if (f.hp <= 0 || f.sp[id] > 0 || f.holding) return false;
+  if (f.st === St.Hurt || f.st === St.Down || f.st === St.GetUp || f.st === St.Dead || f.st === St.Held || f.st === St.Stomp) return false;
+  if (id === SP.Beam || id === SP.Shield || id === SP.Ultimate) return f.z === 0 && f.st !== St.Beam;
+  return true;
 }
 
 function triggerSpecial(w: World, f: Fighter, id: number) {
   f.pend = 0;
   f.buf = 0;
   f.bufT = 0;
-  f.mp = 0;
   f.spOn = 1;
   switch (id) {
     case SP.Beam:
@@ -972,7 +945,7 @@ function updateShots(w: World) {
       for (const t of w.fighters) {
         if (!isPlayer(t) || !vulnerable(t)) continue;
         if (Math.abs(t.x - s.x) > 8 || Math.abs(t.y - s.y) > 7 || Math.abs(t.z + 14 - s.z) > 16) continue;
-        hit(w, t, -1, SHURIKEN.dmg, SHURIKEN.kbx, false, 0, s.vx >= 0 ? 1 : -1, false);
+        hit(w, t, -1, SHURIKEN.dmg, SHURIKEN.kbx, false, 0, s.vx >= 0 ? 1 : -1);
         s.life = 0;
         break;
       }
@@ -983,8 +956,8 @@ function updateShots(w: World) {
       if (Math.abs(t.x - s.x) > 9 || Math.abs(t.y - s.y) > 8 || Math.abs(t.z + 14 - s.z) > 18) continue;
       const dir = s.vx >= 0 ? 1 : -1;
       const mul = slotMul(w, s.owner - 1);
-      if (s.kind === 1) hit(w, t, s.owner - 1, Math.round(VOLLEY.dmg * mul), 2.2, true, 2.4, dir, false);
-      else hit(w, t, s.owner - 1, Math.round(BULLET.dmg * mul), BULLET.kbx, false, 0, dir, true);
+      if (s.kind === 1) hit(w, t, s.owner - 1, Math.round(VOLLEY.dmg * mul), 2.2, true, 2.4, dir);
+      else hit(w, t, s.owner - 1, Math.round(BULLET.dmg * mul), BULLET.kbx, false, 0, dir);
       s.life = 0;
       break;
     }
@@ -1133,7 +1106,7 @@ export function snapshot(w: World): Snapshot {
       n: f.wn,
       c: f.cast,
       b: (f.aura > 0 ? 1 : 0) | (f.shield > 0 ? 2 : 0) | (f.halo > 0 ? 4 : 0) | ((f.aura > 0 && f.aura < 120) || (f.shield > 0 && f.shield < 120) ? 8 : 0),
-      k: f.sp.reduce((m, c, i) => (c > 0 ? m | (1 << i) : m), 0),
+      k: f.kind === 'player' ? f.sp.slice() : [],
     })),
     it: w.items.map((i) => ({ i: i.id, k: i.kind, x: r1(i.x), y: r1(i.y), z: r1(i.z) })),
     sh: w.shots.map((s) => ({ k: s.kind, x: r1(s.x), y: r1(s.y), z: r1(s.z), r: (s.vx >= 0 ? 1 : -1) as 1 | -1 })),

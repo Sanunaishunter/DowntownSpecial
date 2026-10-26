@@ -1,9 +1,11 @@
 import './style.css';
 import { SCREEN_H, SCREEN_W } from '../shared/constants';
-import { MP_MAX, SPECIALS } from '../shared/specials';
+import { TICK_RATE } from '../shared/constants';
+import { SPECIALS } from '../shared/specials';
 import { Assets } from './assets';
 import { Input, setupTouch } from './input';
 import { Renderer } from './render';
+import { SKILL_ICONS } from './skillicons';
 import { LocalSession, NetSession, type Session } from './session';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -37,21 +39,20 @@ async function main() {
   const touch = matchMedia('(pointer: coarse)').matches || /[?&]touch\b/.test(location.search);
   app.classList.toggle('touch', touch);
 
-  // Specials fire by themselves when the meter is full; the buttons exist only in the manual practice mode (/?manual).
+  // Six special buttons above A/B (keys 1-6 on a keyboard); each one cools down on its own after it is used.
   const q = new URLSearchParams(location.search);
-  const manual = q.has('manual');
   const specialsEl = $('specials');
-  if (manual) {
-    for (const sp of SPECIALS) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.id = `sp-${sp.id}`;
-      b.title = sp.name;
-      b.textContent = sp.name.slice(0, 2);
-      specialsEl.appendChild(b);
-      touchApi.bind(b, sp.bit);
-    }
-  }
+  const spBtns = SPECIALS.map((sp) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.id = `sp-${sp.id}`;
+    b.className = `sp-${sp.key}`;
+    b.title = `${sp.name} [${sp.id + 1}]`;
+    b.innerHTML = `${SKILL_ICONS[sp.id]}<span class="cd"></span>`;
+    specialsEl.appendChild(b);
+    touchApi.bind(b, sp.bit);
+    return { el: b, cd: b.querySelector('.cd') as HTMLElement, last: -1 };
+  });
 
   const assets = new Assets();
   void assets.load();
@@ -105,8 +106,8 @@ async function main() {
     }
   };
 
-  // Practice parameters for single-player: /?mp=100 starts with a full meter, /?weapon=1..5 starts armed.
-  const practice = { mp: Number(q.get('mp')) || 0, weapon: Number(q.get('weapon')) || 0, manual };
+  // Practice parameter for single-player: /?weapon=1..5 starts armed.
+  const practice = { weapon: Number(q.get('weapon')) || 0 };
   $('btn-local').onclick = () => start(new LocalSession(input, practice));
   $('btn-create').onclick = () => void connect('create');
   const join = () => {
@@ -149,11 +150,15 @@ async function main() {
       netInfo.textContent = session.info();
       const mine = snap?.sl[session.mySlot()];
       const me = snap && mine ? snap.f.find((q) => q.i === mine.f) : undefined;
-      const ready = !!me && me.e >= MP_MAX && me.s !== 18;
-      if (manual) {
-        specialsEl.classList.toggle('ready', ready);
-        if (ready && !touch) hint = SPECIALS.map((x) => `[${x.id + 1}] ${x.name}`).join('  ');
-      }
+      SPECIALS.forEach((sp, n) => {
+        const btn = spBtns[n];
+        const left = me?.k[n] ?? 0;
+        if (left === btn.last) return;
+        btn.last = left;
+        btn.el.classList.toggle('cooling', left > 0);
+        btn.el.style.setProperty('--cd', String(left / sp.cooldown));
+        btn.cd.textContent = left > 0 ? String(Math.ceil(left / TICK_RATE)) : '';
+      });
       if (!hint && session instanceof NetSession && snap && snap.sl.filter((s) => s.a).length < 2) {
         hint = '把網址傳給朋友，等他加入…';
       }

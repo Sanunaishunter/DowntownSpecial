@@ -7,9 +7,8 @@ import { WEAPONS, WID } from '../src/shared/weapons';
 
 const none: PlayerInput = { held: 0, pressed: 0 };
 
-function setup(seed = 11, manual = true) {
+function setup(seed = 11) {
   const w = createWorld(seed);
-  w.manual = manual;
   addPlayer(w, 0);
   for (let i = 0; i < 5; i++) step(w, [none, undefined]);
   w.stageT = -100000;
@@ -66,51 +65,35 @@ function give(w: World, weapon: number, wn = WEAPONS[weapon].uses) {
   return p;
 }
 
-describe('energy', () => {
-  it('builds up when you land hits and caps at the maximum', () => {
+describe('special meter', () => {
+  it('stays empty while you land hits', () => {
     const w = setup();
-    const e = foe(w, 14, 0, 'saburo', 'grunt', 9999);
+    foe(w, 14, 0, 'saburo', 'grunt', 9999);
     player(w).face = 1;
     press(w, Btn.A);
     run(w, 14);
-    const after1 = player(w).mp;
-    expect(after1).toBeGreaterThan(0);
-    for (let i = 0; i < 40 && player(w).mp < MP_MAX; i++) {
-      e.st = St.Idle;
-      e.inv = 0;
-      e.x = player(w).x + 14;
-      press(w, Btn.B);
-      run(w, 24);
-    }
-    expect(player(w).mp).toBe(MP_MAX);
+    press(w, Btn.B);
+    run(w, 24);
+    expect(player(w).mp).toBe(0);
   });
 
-  it('does not build while hits come from a special move', () => {
+  it('only shows how much of a running special is left', () => {
     const w = setup();
     const p = player(w);
-    p.mp = MP_MAX;
     p.face = 1;
     foe(w, 60, 0, 'saburo', 'grunt', 9999);
     press(w, Btn.S1);
     run(w, 100);
     expect(p.st).toBe(St.Beam);
+    expect(p.mp).toBeGreaterThan(0);
     expect(p.mp).toBeLessThan(MP_MAX);
   });
 });
 
 describe('beam special', () => {
-  it('needs a full meter', () => {
-    const w = setup();
-    player(w).mp = MP_MAX - 1;
-    press(w, Btn.S1);
-    run(w, 5);
-    expect(player(w).st).not.toBe(St.Beam);
-  });
-
   it('roots the player, pins and damages enemies in line, then ends', () => {
     const w = setup();
     const p = player(w);
-    p.mp = MP_MAX;
     p.face = 1;
     const near = foe(w, 60, 0, 'saburo', 'grunt', 200);
     const off = foe(w, 60, 30, 'saburo', 'grunt', 200);
@@ -132,7 +115,6 @@ describe('beam special', () => {
   it('makes the caster untouchable while firing', () => {
     const w = setup();
     const p = player(w);
-    p.mp = MP_MAX;
     p.face = 1;
     const e = foe(w, -14, 0, 'saburo', 'grunt', 100);
     e.face = 1;
@@ -148,7 +130,6 @@ describe('fist volley special', () => {
   it('fires ten shots while the player stays free to move', () => {
     const w = setup();
     const p = player(w);
-    p.mp = MP_MAX;
     p.face = 1;
     const seen = new Set<number>();
     const x0 = p.x;
@@ -167,7 +148,6 @@ describe('fist volley special', () => {
   it('knocks enemies down and is cancelled when the caster is knocked down', () => {
     const w = setup();
     const p = player(w);
-    p.mp = MP_MAX;
     p.face = 1;
     const e = foe(w, 90, 0, 'saburo', 'grunt', 100);
     press(w, Btn.S2);
@@ -319,7 +299,7 @@ describe('snapshot', () => {
   });
 });
 
-// Which special fired right after the meter filled (read from what it started).
+// Which special started (read from what it set going).
 function fired(p: Fighter) {
   const ids: number[] = [];
   if (p.st === St.Beam) ids.push(SP.Beam);
@@ -330,84 +310,95 @@ function fired(p: Fighter) {
   return ids;
 }
 
-describe('random specials', () => {
-  it('a full meter fires one special by itself, and all of them can come up', () => {
-    const seen = new Set<number>();
-    for (let seed = 1; seed <= 300; seed++) {
-      const w = setup(seed, false);
-      const p = player(w);
-      p.hp = 40;
-      p.mp = MP_MAX;
-      run(w, 2);
-      const ids = fired(p);
-      expect(ids.length).toBeGreaterThan(0);
-      if (ids.length === 5) seen.add(SP.Ultimate);
-      else {
-        expect(ids.length).toBe(1);
-        seen.add(ids[0]);
-      }
-      expect(p.sp.some((c) => c > 0)).toBe(true);
-    }
-    expect([...seen].sort()).toEqual([0, 1, 2, 3, 4, 5]);
-  });
-
-  it('does not fire without a full meter, and waits while another special runs', () => {
-    const w = setup(5, false);
+describe('special buttons', () => {
+  it('every special is ready at the start and nothing fires by itself', () => {
+    const w = setup();
     const p = player(w);
-    p.mp = MP_MAX - 1;
-    run(w, 20);
+    expect(p.sp).toEqual([0, 0, 0, 0, 0, 0]);
+    p.hp = 10;
+    run(w, 300);
     expect(fired(p)).toEqual([]);
-    p.mp = MP_MAX;
-    run(w, 1);
-    const first = fired(p);
-    expect(first.length).toBeGreaterThan(0);
-    p.mp = MP_MAX;
-    const sp = [...p.sp];
-    run(w, 1);
-    expect(p.sp).toEqual(sp.map((c) => Math.max(0, c - 1)));
   });
 
-  it('a special that is cooling down is never picked again', () => {
-    for (let seed = 1; seed <= 100; seed++) {
-      const w = setup(seed, false);
+  it('cooldown in seconds is the skill power divided by 90', () => {
+    for (const s of SPECIALS) expect(s.cooldown).toBe(Math.round((s.power / 90) * 60));
+    expect(SPECIALS.map((s) => s.cooldown / 60)).toEqual([20, 15, 30, 40, 30, 80]);
+  });
+
+  it('each button fires its own special and starts only its own cooldown', () => {
+    SPECIALS.slice(0, 5).forEach((s) => {
+      const w = setup();
       const p = player(w);
-      p.hp = 10;
-      p.sp = [0, 0, 0, 0, 0, 0].map((_, i) => (i === SP.Halo || i === SP.Ultimate ? 0 : 500));
-      p.mp = MP_MAX;
-      run(w, 2);
-      expect(fired(p).length).toBeGreaterThan(0);
-      expect(p.halo > 0 || p.sp[SP.Ultimate] > 400).toBe(true);
-    }
+      press(w, s.bit);
+      expect(fired(p)).toEqual([s.id]);
+      expect(p.sp.map((c, i) => (c > 0 ? i : -1)).filter((i) => i >= 0)).toEqual([s.id]);
+      expect(p.sp[s.id]).toBe(s.cooldown);
+    });
   });
 
-  it('cooldowns run down and the special can come back', () => {
-    const w = setup(3, false);
+  it('a special that is cooling down cannot be used again until it is ready', () => {
+    const w = setup();
     const p = player(w);
-    p.sp = [1, 1, 1, 1, 1, 1].map((c, i) => (i === SP.Aura ? 3 : c));
+    press(w, Btn.S3);
+    p.hp = 10;
     run(w, 5);
+    press(w, Btn.S3);
+    expect(p.hp).toBe(10);
+    p.sp[SP.Halo] = 3;
+    run(w, 1);
+    press(w, Btn.S3);
+    expect(p.hp).toBe(10);
+    run(w, 1);
+    expect(p.sp[SP.Halo]).toBe(0);
+    press(w, Btn.S3);
+    expect(p.hp).toBe(p.maxHp);
+    expect(p.sp[SP.Halo]).toBe(SPECIALS[SP.Halo].cooldown);
+  });
+
+  it('cooldowns run down on their own', () => {
+    const w = setup();
+    const p = player(w);
+    p.sp = [1, 2, 3, 4, 5, 6];
+    run(w, 7);
     expect(p.sp.every((c) => c === 0)).toBe(true);
   });
 
-  it('a hurt hero is far more likely to be healed than a healthy one', () => {
-    let hurt = 0;
-    let fine = 0;
-    for (let seed = 1; seed <= 400; seed++) {
-      for (const [hp, set] of [[30, 'hurt'], [100, 'fine']] as const) {
-        const w = setup(seed, false);
-        const p = player(w);
-        p.hp = hp;
-        p.mp = MP_MAX;
-        run(w, 2);
-        if (p.halo > 0 && fired(p).length === 1) set === 'hurt' ? hurt++ : fine++;
-      }
-    }
-    expect(hurt).toBeGreaterThan(fine * 2);
+  it('buffs can be stacked on a running special, but not on a second beam', () => {
+    const w = setup();
+    const p = player(w);
+    press(w, Btn.S1);
+    expect(p.st).toBe(St.Beam);
+    press(w, Btn.S4);
+    press(w, Btn.S3);
+    expect(p.aura).toBeGreaterThan(0);
+    expect(p.halo).toBeGreaterThan(0);
+    expect(p.st).toBe(St.Beam);
+    press(w, Btn.S5);
+    expect(p.shield).toBe(0);
+    expect(p.sp[SP.Shield]).toBe(0);
+  });
+
+  it('cannot be used while knocked down, in the air (beam), or dead', () => {
+    const w = setup();
+    const p = player(w);
+    p.st = St.Down;
+    press(w, Btn.S4);
+    expect(p.aura).toBe(0);
+    p.st = St.Idle;
+    p.z = 10;
+    p.vz = 0;
+    press(w, Btn.S1);
+    expect(p.st).not.toBe(St.Beam);
+    expect(p.sp[SP.Beam]).toBe(0);
+    p.z = 0;
+    p.hp = 0;
+    press(w, Btn.S4);
+    expect(p.aura).toBe(0);
   });
 });
 
 describe('光環 / 爆氣 / 聖盾 / 主角威能', () => {
   const trigger = (w: World, bit: number) => {
-    player(w).mp = MP_MAX;
     press(w, bit);
   };
 
@@ -500,7 +491,8 @@ describe('光環 / 爆氣 / 聖盾 / 主角威能', () => {
     trigger(w, Btn.S4);
     const f = snapshot(w).f.find((q) => q.d === 'ichiro')!;
     expect(f.b & 1).toBe(1);
-    expect(f.k & (1 << SP.Aura)).toBeTruthy();
+    expect(f.k[SP.Aura]).toBeGreaterThan(0);
+    expect(snapshot(w).f.every((q) => q.d === 'ichiro' || q.k.length === 0)).toBe(true);
   });
 });
 

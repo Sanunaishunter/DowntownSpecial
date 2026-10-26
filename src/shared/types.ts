@@ -128,8 +128,6 @@ export interface World {
   status: 0 | 1 | 2;
   statusT: number;
   slots: PlayerSlot[];
-  /** practice mode: S1..S6 trigger specials by hand (ignores the random pick and cooldowns) */
-  manual: boolean;
 }
 
 export interface PlayerInput {
@@ -155,8 +153,8 @@ export interface SnapFighter {
   c: number;
   /** buffs: 1 aura, 2 shield, 4 halo light, 8 a buff is about to end */
   b: number;
-  /** bit i set = special i is cooling down */
-  k: number;
+  /** cooldown ticks left per special (players only, empty for everyone else) */
+  k: number[];
 }
 
 export interface SnapShot {

@@ -162,48 +162,79 @@ input {
   gap: 8px;
 }
 #specials {
-  display: flex;
-  gap: 10px;
-  min-height: min(56px, 14vw);
-  opacity: 0;
-  transform: translateY(16px) scale(0.7);
-  pointer-events: none;
-  transition: opacity 0.25s, transform 0.25s;
-}
-#specials.ready {
-  opacity: 1;
-  transform: none;
-  pointer-events: auto;
+  --sp: min(46px, 12vw);
+  display: grid;
+  grid-template-columns: repeat(3, var(--sp));
+  gap: 6px;
 }
 #specials button {
-  flex: none;
-  width: min(56px, 14vw);
-  height: min(56px, 14vw);
+  --cd: 0;
+  position: relative;
+  width: var(--sp);
+  height: var(--sp);
   border-radius: 50%;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(circle at 35% 30%, #5ae8ff, #1a5aa8);
+  overflow: hidden;
+  background: radial-gradient(circle at 35% 30%, var(--c1, #5ae8ff), var(--c2, #1a5aa8));
   border-color: #fff;
-  box-shadow: 0 0 12px rgba(90, 230, 255, 0.9);
+  box-shadow: 0 0 10px var(--c1, rgba(90, 230, 255, 0.9));
   touch-action: none;
 }
-#specials.ready button {
-  animation: glow 0.9s ease-in-out infinite alternate;
+#specials button.on {
+  filter: brightness(1.4);
+  transform: scale(0.92);
 }
 #specials button svg {
-  width: 62%;
-  height: 62%;
+  width: 66%;
+  height: 66%;
   pointer-events: none;
 }
-@keyframes glow {
-  from {
-    box-shadow: 0 0 6px rgba(90, 230, 255, 0.6);
-  }
-  to {
-    box-shadow: 0 0 18px rgba(255, 255, 255, 1);
-  }
+/* the dark wedge shrinks clockwise as the cooldown runs out; the number is the seconds left */
+#specials button .cd {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: conic-gradient(rgba(10, 10, 20, 0.78) calc(var(--cd) * 360deg), transparent 0);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  text-shadow: 0 1px 2px #000;
+  pointer-events: none;
+}
+#specials button.cooling {
+  box-shadow: none;
+  border-color: rgba(255, 255, 255, 0.4);
+  filter: saturate(0.5);
+}
+#specials .sp-beam {
+  --c1: #5ae8ff;
+  --c2: #1a5aa8;
+}
+#specials .sp-volley {
+  --c1: #ffb347;
+  --c2: #b34a10;
+}
+#specials .sp-halo {
+  --c1: #fff08a;
+  --c2: #c8962a;
+}
+#specials .sp-aura {
+  --c1: #ff9a3c;
+  --c2: #b3200c;
+}
+#specials .sp-shield {
+  --c1: #8fc0ff;
+  --c2: #2a4fa8;
+}
+#specials .sp-ultimate {
+  --c1: #ff8ae0;
+  --c2: #8a2aa8;
 }
 #btns {
   display: flex;
@@ -264,6 +295,7 @@ input {
     pointer-events: none;
   }
   #app.touch #dpad,
+  #app.touch #specials,
   #app.touch #btns {
     pointer-events: auto;
     opacity: 0.85;
@@ -274,6 +306,14 @@ input {
   }
   #app.touch #btns {
     gap: 6px;
+  }
+  #app.touch #specials {
+    --sp: 38px;
+    grid-template-columns: repeat(6, var(--sp));
+    gap: 5px;
+  }
+  #app.touch #specials button .cd {
+    font-size: 13px;
   }
   #app.touch #btns button {
     width: 54px;

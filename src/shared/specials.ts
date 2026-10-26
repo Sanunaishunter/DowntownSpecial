@@ -1,31 +1,40 @@
-import { Btn } from './constants';
+import { Btn, TICK_RATE } from './constants';
 
 export interface SpecialDef {
   id: number;
   key: string;
   name: string;
   bit: number;
-  /** ticks (60 per second) before it can trigger again, counted from the moment it triggers */
+  /** skill strength (damage dealt / health healed / buff strength); the cooldown in seconds is power / 90 */
+  power: number;
+  /** ticks (60 per second) before it can be used again, counted from the moment it is used */
   cooldown: number;
-  /** relative chance in the random pick */
-  weight: number;
 }
 
-// Six specials. When the energy meter is full one of the ones that are not cooling down fires at random.
+const COOLDOWN_DIV = 90;
+const def = (id: number, key: string, name: string, bit: number, power: number): SpecialDef => ({
+  id,
+  key,
+  name,
+  bit,
+  power,
+  cooldown: Math.round((power / COOLDOWN_DIV) * TICK_RATE),
+});
+
+// Six specials, one button each. All are ready at the start; using one starts its own cooldown.
 export const SPECIALS: SpecialDef[] = [
-  { id: 0, key: 'beam', name: '龜甲砲', bit: Btn.S1, cooldown: 1200, weight: 3 },
-  { id: 1, key: 'volley', name: '連拳彈', bit: Btn.S2, cooldown: 900, weight: 3 },
-  { id: 2, key: 'halo', name: '光環', bit: Btn.S3, cooldown: 1800, weight: 2 },
-  { id: 3, key: 'aura', name: '爆氣', bit: Btn.S4, cooldown: 2400, weight: 2 },
-  { id: 4, key: 'shield', name: '聖盾', bit: Btn.S5, cooldown: 1800, weight: 2 },
-  { id: 5, key: 'ultimate', name: '主角威能', bit: Btn.S6, cooldown: 4800, weight: 1 },
+  def(0, 'beam', '龜甲砲', Btn.S1, 1800),
+  def(1, 'volley', '連拳彈', Btn.S2, 1350),
+  def(2, 'halo', '光環', Btn.S3, 2700),
+  def(3, 'aura', '爆氣', Btn.S4, 3600),
+  def(4, 'shield', '聖盾', Btn.S5, 2700),
+  def(5, 'ultimate', '主角威能', Btn.S6, 7200),
 ];
 
 export const SP = { Beam: 0, Volley: 1, Halo: 2, Aura: 3, Shield: 4, Ultimate: 5 } as const;
 
+/** The bar under the health bar shows how much of a running timed special is left (full = MP_MAX). */
 export const MP_MAX = 100;
-export const MP_PER_HIT = 4;
-export const MP_PER_KNOCKDOWN = 8;
 
 export const BEAM = { charge: 24, fire: 360, recover: 14, pulse: 5, len: 190, dmg: 2, halfDepth: 14 };
 export const VOLLEY = { shots: 10, gap: 14, speed: 4.5, life: 50, dmg: 14 };
