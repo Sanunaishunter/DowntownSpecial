@@ -5,7 +5,7 @@ export const CRIT = { chance: 0.1, mult: 2 };
 export const COMBO = { keep: 80 };
 
 /** The hero shouts the name of a special move for `dur` ticks, in a speech bubble. Codes: 1-4 moves, 10 + id for the six specials. */
-export const CRY = { dur: 75, barrage: 1, tatsu: 2, whirl: 3, upper: 4, special: 10 };
+export const CRY = { dur: 75, barrage: 1, tatsu: 2, whirl: 3, upper: 4, special: 10, traitor: 20, traitorDur: 130 };
 
 export const CRY_TEXT: Record<number, string> = {
   [CRY.barrage]: '百裂拳！',
@@ -18,6 +18,7 @@ export const CRY_TEXT: Record<number, string> = {
   [CRY.special + 3]: '爆氣！',
   [CRY.special + 4]: '聖盾！',
   [CRY.special + 5]: '天雷萬鈞！',
+  [CRY.traitor]: '讓他下課！',
 };
 
 /** Event kinds for the damage numbers: the 5th element of the event is the damage. */

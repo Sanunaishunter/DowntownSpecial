@@ -1614,3 +1614,32 @@ describe('wide view (/?wide)', () => {
     expect(snapshot(w).vw).toBe(256);
   });
 });
+
+describe('the traitor', () => {
+  it('shouts when he shows up, and always leaves the twin swords when he falls', () => {
+    const w = setup();
+    enterOnsen(w);
+    run(w, ONSEN.intro.end + 2);
+    const p = player(w);
+    p.hp = p.maxHp = 999999;
+    w.kills = ONSEN.traitorAt;
+    run(w, 2);
+    const t = w.fighters.find((f) => f.elite === 2)!;
+    expect(t).toBeTruthy();
+    const snap = snapshot(w).f.find((f) => f.i === t.id)!;
+    expect(snap.cr).toBe(CRY.traitor);
+    expect(CRY_TEXT[CRY.traitor]).toBe('讓他下課！');
+    // the shout fades out
+    run(w, CRY.traitorDur + 5);
+    expect(snapshot(w).f.find((f) => f.i === t.id)!.cr).toBe(0);
+    // he is brought down: the twin swords are on the floor, whatever the dice say
+    const before = w.items.filter((i) => i.kind === WID.Twin).length;
+    t.hp = 1;
+    hit(w, t, 0, 999, 1, true, 2, 1);
+    run(w, 80);
+    expect(t.st).toBe(St.Dead);
+    expect(w.items.filter((i) => i.kind === WID.Twin).length).toBe(before + 1);
+    // an ordinary elite does not leave them every time
+    expect(w.fighters.filter((f) => f.elite === 1 && f.st === St.Dead).length).toBe(0);
+  });
+});

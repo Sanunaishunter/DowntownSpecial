@@ -494,9 +494,9 @@ function slashTwin(f: Fighter) {
 }
 
 /** The hero calls out the name of a special move. */
-function shout(f: Fighter, code: number) {
+function shout(f: Fighter, code: number, dur = CRY.dur) {
   f.cry = code;
-  f.cryT = CRY.dur;
+  f.cryT = dur;
 }
 
 /**
@@ -634,6 +634,7 @@ function nearestPlayer(w: World, e: Fighter): Fighter | undefined {
 function updateEnemy(w: World, e: Fighter) {
   const d = DEFS[e.def];
   if (e.inv > 0) e.inv--;
+  if (e.cryT > 0) e.cryT--;
   if (e.script) {
     updateBody(w, e);
     return;
@@ -1056,6 +1057,11 @@ function dropOnDeath(w: World, f: Fighter) {
   const boss = f.kind === 'boss';
   if (boss) w.items.push({ id: w.nextId++, kind: ITEM_1UP, x: f.x - 18, y: f.y, z: 14, vx: 0, vy: 0, vz: 0.5, owner: 0, n: 0 });
   if (rand(w) < TONIC_RATE) w.items.push({ id: w.nextId++, kind: ITEM_TONIC, x: f.x + 18, y: f.y, z: 14, vx: 0, vy: 0, vz: 0.5, owner: 0, n: 0 });
+  if (f.elite === 2) {
+    // the traitor always leaves the twin swords
+    w.items.push({ id: w.nextId++, kind: WID.Twin, x: f.x, y: f.y, z: 12, vx: 0, vy: 0, vz: 0.4, owner: 0, n: WEAPONS[WID.Twin].uses });
+    return;
+  }
   if (!boss && rand(w) >= DROP_RATE) return;
   const defs = Object.values(WEAPONS);
   const weights = defs.map((d) => (boss ? d.bossWeight : d.dropWeight));
@@ -1599,6 +1605,7 @@ function spawnElite(w: World, traitor: boolean) {
   f.elite = traitor ? 2 : 1;
   f.face = traitor ? 1 : -1;
   f.cd = 40 + Math.floor(rand(w) * 60);
+  if (traitor) shout(f, CRY.traitor, CRY.traitorDur);
   w.fighters.push(f);
 }
 
