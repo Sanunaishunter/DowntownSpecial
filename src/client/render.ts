@@ -139,15 +139,19 @@ export class Renderer {
     const shieldMs = since('shield', !!(f.b & 2));
     if (f.b & 1) this.drawAura(f, ox, oy, now, auraMs);
     const tatsu = f.s === St.Tatsu;
+    const whirl = f.s === St.Whirl;
     if (tatsu) drawTornado(ctx, ox, oy - Math.round(f.z), f.t, true);
+    const blades: [number, number] = f.w2 ? [f.w, f.w2] : [f.w, f.w];
+    if (whirl) drawWhirl(ctx, ox, oy - Math.round(f.z), f.t, false, blades);
     ctx.save();
     ctx.translate(ox, oy - Math.round(f.z));
-    // 龍捲風腳: the body spins around its own axis, which on a flat sprite is a quick flip
-    const spin = tatsu ? Math.cos(f.t * 0.95) : 1;
-    ctx.scale(f.r * (tatsu ? (Math.abs(spin) < 0.25 ? 0.25 * Math.sign(spin || 1) : spin) : 1), 1);
+    // 龍捲風腳 / 炫風斬: the body spins around its own axis, which on a flat sprite is a quick flip
+    const spin = tatsu ? Math.cos(f.t * 0.95) : whirl ? Math.cos(f.t * 0.6) : 1;
+    ctx.scale(f.r * (tatsu || whirl ? (Math.abs(spin) < 0.25 ? 0.25 * Math.sign(spin || 1) : spin) : 1), 1);
     this.paint(ctx, f);
     ctx.restore();
     if (tatsu) drawTornado(ctx, ox, oy - Math.round(f.z), f.t, false);
+    if (whirl) drawWhirl(ctx, ox, oy - Math.round(f.z), f.t, true, blades);
     if (f.s === St.Barrage) drawBarrage(ctx, ox, oy - Math.round(f.z), f.r, f.t);
     if (f.w === WID.Gatling && f.ht > GATLING.overheat) drawSteam(ctx, ox + f.r * 38, oy - Math.round(f.z) - 21, now);
     if (f.b & 2) drawShield(ctx, ox + f.r * 15, oy - Math.round(f.z), shieldMs, now, !!(f.b & 8));
@@ -155,7 +159,7 @@ export class Renderer {
 
   // Draws the fighter at the origin of an already translated and flipped context.
   private paint(ctx: CanvasRenderingContext2D, f: SnapFighter) {
-    const hasArt = f.w > 1 && this.assets.hasArmed(f.d, f.w);
+    const hasArt = f.w > 1 && !f.w2 && this.assets.hasArmed(f.d, f.w);
     const art = artFor(f, hasArt);
     const drawn = this.assets.draw(ctx, f.d, f.s, art.t, art.weapon, art.anim);
     if (drawn === 0) this.sprites.draw(ctx, f.d, f.s, f.t, f.w);
@@ -346,6 +350,58 @@ function drawShield(ctx: CanvasRenderingContext2D, x: number, y: number, ms: num
   ctx.restore();
 }
 
+// 炫風斬: both arms out, a blade in each hand, spinning like a top. The ellipse is the flat circle the blades sweep; the half of
+// it behind the hero is drawn before him (`front` = false) and the half in front of him after.
+function drawWhirl(ctx: CanvasRenderingContext2D, ox: number, oy: number, t: number, front: boolean, blades: [number, number]) {
+  const handY = -25;
+  const RY = 7;
+  const reach = 11 + 24;
+  ctx.save();
+  ctx.translate(ox, oy + handY);
+  for (let i = 0; i < 2; i++) {
+    const th = t * 0.55 + i * Math.PI;
+    // a fading streak behind each blade
+    for (let k = 0; k < 9; k++) {
+      const a0 = th - (k + 1) * 0.16;
+      const a1 = th - k * 0.16;
+      if ((Math.sin((a0 + a1) / 2) >= 0) !== front) continue;
+      ctx.strokeStyle = `rgba(210,238,255,${0.5 * (1 - k / 9)})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, reach, RY, 0, a0, a1);
+      ctx.stroke();
+    }
+    if ((Math.sin(th) >= 0) !== front) continue;
+    const c = Math.cos(th);
+    const s = Math.sin(th);
+    const x0 = Math.round(c * 11);
+    const x1 = Math.round(c * reach);
+    const y1 = Math.round(s * RY);
+    ctx.strokeStyle = '#0c0c14';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(x0, 0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+    ctx.strokeStyle = blades[i] === WID.Saber ? (s >= 0 ? '#9af4ff' : '#4ab0c0') : blades[i] === WID.Bamboo ? (s >= 0 ? '#f0dc90' : '#a89850') : s >= 0 ? '#eef4ff' : '#9aa6b4';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x0, 0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+    ctx.fillStyle = '#e0b030';
+    ctx.fillRect(x0 - 1, -3, 2, 6);
+  }
+  if (front) {
+    // the arms held straight out to both sides
+    ctx.fillStyle = '#0c0c14';
+    ctx.fillRect(-13, -2, 26, 5);
+    ctx.fillStyle = '#e8b890';
+    ctx.fillRect(-12, -1, 24, 3);
+  }
+  ctx.restore();
+}
+
 function shadow(ctx: CanvasRenderingContext2D, x: number, y: number, z: number, rx: number) {
   const r = Math.max(4, rx - z / 6);
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
@@ -361,6 +417,7 @@ function artFor(f: SnapFighter, hasArt: boolean): { weapon: number; anim?: strin
   if (f.s === St.Beam) return { weapon: 0, anim: f.t >= BEAM.charge + BEAM.fire ? 'beamend' : 'beam', t: f.t };
   if (f.s === St.Barrage) return { weapon: 0, anim: 'punch', t: f.t % 12 };
   if (f.s === St.Tatsu) return { weapon: 0, anim: 'kick', t: 7 };
+  if (f.s === St.Whirl) return { weapon: 0, anim: 'idle', t: 0 };
   if ((f.s === St.Idle || f.s === St.Walk || f.s === St.Run) && f.c > 0) return { weapon: 0, anim: 'cast', t: 0 };
   if (!f.w) return { weapon: 0, t: f.t };
   if (f.w === WID.Stick || hasArt) return { weapon: f.w, t: f.t };
@@ -427,6 +484,15 @@ function weaponGfx(ctx: CanvasRenderingContext2D, kind: number, heat = 0, spin =
       R('#7a4a20', 14, 0, 7, 2);
       R('#2c2c32', 6, 2, 3, 6);
       break;
+    case WID.Twin:
+      // one of the two blades: a long steel blade with a gold guard and a red grip
+      R('#6a1c1c', -5, -1, 7, 3);
+      R('#e0b030', 2, -3, 2, 7);
+      R('#9aa6b4', 4, -1, 25, 3);
+      R('#e6eef8', 4, -1, 25, 1);
+      R('#ffffff', 6, -1, 20, 1);
+      R('#cfd8e4', 29, -1, 2, 2);
+      break;
     case WID.Gatling: {
       // heat: 0..500 (501+ = jammed). The barrels start to glow at 300 and are white-red at the limit.
       const k = Math.max(0, Math.min(1, (heat - GATLING.red) / (GATLING.overheat - GATLING.red)));
@@ -460,9 +526,24 @@ function weaponGfx(ctx: CanvasRenderingContext2D, kind: number, heat = 0, spin =
 function drawWeaponInHand(ctx: CanvasRenderingContext2D, f: SnapFighter) {
   const k = f.w;
   if (!k || k === WID.Stick) return;
-  if (f.s === St.Down || f.s === St.Dead || f.s === St.Held || f.s === St.Hurt || f.s === St.Beam) return;
+  if (f.s === St.Down || f.s === St.Dead || f.s === St.Held || f.s === St.Hurt || f.s === St.Beam || f.s === St.Whirl) return;
   const wd = WEAPONS[k];
   ctx.save();
+  if (k === WID.Twin || f.w2) {
+    // a blade in each hand: the back one is a touch behind the front one while swinging, and tilted the other way when resting
+    const p = f.s === St.Swing ? Math.min(1, f.t / (wd.atk.start + wd.atk.active + 2)) : -1;
+    for (const back of [true, false]) {
+      const kind = back && f.w2 ? f.w2 : k;
+      ctx.save();
+      ctx.translate(back ? -3 : 10, back ? -22 : -21);
+      if (p >= 0) ctx.rotate(-1.9 + Math.min(1, Math.max(0, p * (back ? 0.85 : 1))) * 2.5 + (back ? -0.25 : 0));
+      else ctx.rotate(-Math.PI / 2 + (back ? -0.35 : 0.12));
+      weaponGfx(ctx, kind);
+      ctx.restore();
+    }
+    ctx.restore();
+    return;
+  }
   if (f.s === St.Swing) {
     const p = Math.min(1, f.t / (wd.atk.start + wd.atk.active + 2));
     ctx.translate(9, -22);
@@ -515,6 +596,10 @@ function drawItem(ctx: CanvasRenderingContext2D, it: SnapItem, cam: number, now:
   ctx.save();
   ctx.translate(sx - (it.k === WID.Stone ? 6 : 10), sy - 3 - Math.round(it.z));
   weaponGfx(ctx, it.k);
+  if (it.k === WID.Twin) {
+    ctx.translate(1, -4);
+    weaponGfx(ctx, it.k);
+  }
   ctx.restore();
 }
 
@@ -930,7 +1015,9 @@ function drawHud(ctx: CanvasRenderingContext2D, snap: Snapshot, o: DrawOpts) {
       const jammed = f.w === WID.Gatling && f.ht > GATLING.overheat;
       const hot = f.w === WID.Gatling && f.ht >= GATLING.red;
       const state = jammed ? `　過熱 ${f.ht - GATLING.overheat}s` : '';
-      text(ctx, `${wd.name}${wd.uses < UNLIMITED ? ` ${f.n}` : ''}${state}`, x, 35, jammed ? '#ff6a4a' : hot ? '#ffb070' : '#bfe8ff');
+      const wd2 = f.w2 ? WEAPONS[f.w2] : undefined;
+      const pair = wd2 ? ` + ${wd2.name} ${f.n2}` : '';
+      text(ctx, `${wd.name}${wd.uses < UNLIMITED ? ` ${f.n}` : ''}${pair}${state}`, x, 35, jammed ? '#ff6a4a' : hot ? '#ffb070' : '#bfe8ff');
     }
   });
 

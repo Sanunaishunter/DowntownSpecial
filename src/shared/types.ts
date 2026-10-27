@@ -25,6 +25,7 @@ export const St = {
   Land: 23,
   Barrage: 24,
   Tatsu: 25,
+  Whirl: 26,
 } as const;
 
 export const ST_NAMES: string[] = [];
@@ -64,11 +65,17 @@ export interface Fighter {
   bufT: number;
   tapDir: number;
   tapT: number;
+  /** dual swords: slashes in the current chain, and the ticks left to keep it going with another one */
+  slash: number;
+  slashT: number;
   jumpT: number;
   cd: number;
   aiT: number;
   lastSlot: number;
   wn: number;
+  /** the blade in the other hand when two blades are held (雙持), and its uses left */
+  weapon2: number;
+  wn2: number;
   mp: number;
   volley: number;
   volleyCd: number;
@@ -166,9 +173,12 @@ export interface SnapFighter {
   /** blue bar cap */
   em: number;
   w: number;
+  /** second blade in the other hand, 0 = none */
+  w2: number;
   v: number;
   e: number;
   n: number;
+  n2: number;
   c: number;
   /** gatling barrel: 0..500 = heat, 501..510 = jammed with that many seconds left */
   ht: number;

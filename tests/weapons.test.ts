@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Btn } from '../src/shared/constants';
-import { addPlayer, createWorld, snapshot, step } from '../src/shared/sim';
+import { addPlayer, createWorld, hit, snapshot, step } from '../src/shared/sim';
 import { AURA, BARRAGE, BEAM, ENEMY_HALO, HALO, MP_MAX, SHIELD, SP, SPECIALS, TATSU, THUNDER, VOLLEY } from '../src/shared/specials';
 import { St, type Fighter, type PlayerInput, type World } from '../src/shared/types';
-import { GATLING, ITEM_1UP, ITEM_TONIC, WEAPONS, WID } from '../src/shared/weapons';
+import { GATLING, ITEM_1UP, ITEM_TONIC, TWIN, WEAPONS, WID } from '../src/shared/weapons';
 import { DEFS } from '../src/shared/defs';
 import { STAGE } from '../src/shared/stage';
 
@@ -287,7 +287,7 @@ describe('drops', () => {
     run(w, 4);
     expect(w.items.length).toBe(2);
     const gun = w.items.find((i) => i.kind !== ITEM_1UP)!;
-    expect([WID.Saber, WID.Rifle]).toContain(gun.kind);
+    expect([WID.Saber, WID.Rifle, WID.Gatling, WID.Twin]).toContain(gun.kind);
     expect(gun.n).toBe(WEAPONS[gun.kind].uses);
     expect(w.items.filter((i) => i.kind === ITEM_1UP).length).toBe(1);
   });
@@ -306,7 +306,7 @@ describe('drops', () => {
       for (let i = 0; i < 4; i++) step(w, [none, undefined]);
       for (const it of w.items) if (it.kind !== ITEM_TONIC) seen.add(it.kind);
     }
-    expect([...seen].sort()).toEqual([WID.Stick, WID.Bamboo, WID.Stone, WID.Saber, WID.Rifle, WID.Gatling]);
+    expect([...seen].sort()).toEqual([WID.Stick, WID.Bamboo, WID.Stone, WID.Saber, WID.Rifle, WID.Gatling, WID.Twin]);
   });
 
   it('grunts sometimes drop a weapon', () => {
@@ -1103,5 +1103,193 @@ describe('run buttons', () => {
       for (let i = 0; i < 20; i++) step(w, [none, undefined]);
       expect(p.st).toBe(St.Idle);
     }
+  });
+});
+
+describe('雙劍 / 炫風斬', () => {
+  const slash = (w: World) => {
+    press(w, Btn.A);
+    run(w, 20);
+  };
+
+  it('a chain of slashes turns into the spinning 炫風斬, which does not wait for anything else', () => {
+    const w = setup();
+    const p = player(w);
+    give(w, WID.Twin);
+    for (let i = 0; i < TWIN.chain - 1; i++) {
+      slash(w);
+      expect(p.st).not.toBe(St.Whirl);
+    }
+    press(w, Btn.A);
+    run(w, 6);
+    expect(p.st).toBe(St.Whirl);
+  });
+
+  it('slashes that come too late do not count towards the chain', () => {
+    const w = setup();
+    const p = player(w);
+    give(w, WID.Twin);
+    for (let i = 0; i < TWIN.chain + 2; i++) {
+      press(w, Btn.A);
+      run(w, WEAPONS[WID.Twin].atk.total + TWIN.window + 10);
+      expect(p.st).not.toBe(St.Whirl);
+    }
+  });
+
+  it('spins for ten seconds, can walk about, hits both sides, and cannot be knocked out of it', () => {
+    const w = setup();
+    const p = player(w);
+    w.cam = 400;
+    p.x = 500;
+    give(w, WID.Twin);
+    p.slash = TWIN.chain - 1;
+    p.slashT = 30;
+    press(w, Btn.A);
+    run(w, 8);
+    expect(p.st).toBe(St.Whirl);
+    const ahead = foe(w, 18);
+    const behind = foe(w, -18);
+    ahead.aiT = behind.aiT = 99999;
+    ahead.hp = ahead.maxHp = behind.hp = behind.maxHp = 500;
+    const x0 = p.x;
+    run(w, 60, { held: Btn.Right, pressed: 0 });
+    expect(p.x - x0).toBeGreaterThan(30);
+    expect(p.st).toBe(St.Whirl);
+    expect(ahead.hp).toBeLessThan(500);
+    // getting hit does not stop it, and the hero is not pushed back
+    const hpBefore = p.hp;
+    hit(w, p, 0, 3, 2, true, 2.4, 1);
+    expect(p.hp).toBe(hpBefore - 3);
+    expect(p.st).toBe(St.Whirl);
+    // it is over after TWIN.dur ticks, and costs some of the blades' uses
+    const wn = p.wn;
+    run(w, TWIN.dur + 20);
+    expect(p.st).not.toBe(St.Whirl);
+    expect(p.wn).toBe(wn - TWIN.cost);
+  });
+
+  it('is drawn as a state the client knows, and the twin swords can drop', () => {
+    expect(WEAPONS[WID.Twin].dropWeight).toBeGreaterThan(0);
+    const w = setup();
+    const p = player(w);
+    give(w, WID.Twin);
+    p.st = St.Whirl;
+    expect(snapshot(w).f.find((f) => f.i === p.id)!.s).toBe(St.Whirl);
+  });
+});
+
+describe('雙持 (two blades, one in each hand)', () => {
+  const drop = (w: World, kind: number, n: number, dx = 4) => {
+    const p = player(w);
+    w.items.push({ id: w.nextId++, kind, x: p.x + dx, y: p.y, z: 0, vx: 0, vy: 0, vz: 0, owner: 0, n });
+  };
+
+  it('picking up a second blade while holding one puts it in the other hand', () => {
+    const w = setup();
+    const p = give(w, WID.Bamboo, 10);
+    drop(w, WID.Saber, 25);
+    press(w, Btn.A);
+    run(w, 30);
+    expect([p.weapon, p.wn, p.weapon2, p.wn2]).toEqual([WID.Bamboo, 10, WID.Saber, 25]);
+    expect(w.items.length).toBe(0);
+    const s = snapshot(w).f.find((f) => f.i === p.id)!;
+    expect([s.w, s.w2, s.n, s.n2]).toEqual([WID.Bamboo, WID.Saber, 10, 25]);
+  });
+
+  it('only blades pair up: a stick, or a third blade, is left on the ground', () => {
+    const w = setup();
+    const p = give(w, WID.Bamboo, 10);
+    drop(w, WID.Stick, 14);
+    press(w, Btn.A);
+    run(w, 30);
+    expect(p.weapon2).toBe(0);
+    expect(w.items.length).toBe(1);
+    const q = setup();
+    const r = give(q, WID.Stick, 14);
+    drop(q, WID.Bamboo, 5);
+    press(q, Btn.A);
+    run(q, 30);
+    expect(r.weapon2).toBe(0);
+    const t = setup();
+    const u = give(t, WID.Saber, 10);
+    u.weapon2 = WID.Bamboo;
+    u.wn2 = 5;
+    drop(t, WID.Saber, 9);
+    press(t, Btn.A);
+    run(t, 30);
+    expect(t.items.length).toBe(1);
+  });
+
+  it('the hands take turns, each blade wearing out on its own', () => {
+    const w = setup();
+    const p = give(w, WID.Saber, 30);
+    p.weapon2 = WID.Bamboo;
+    p.wn2 = 18;
+    const hits: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      const e = foe(w, 22, 0, 'saburo', 'grunt', 9999);
+      e.aiT = 99999;
+      press(w, Btn.A);
+      run(w, 24);
+      hits.push(p.wn, p.wn2);
+      w.fighters = w.fighters.filter((f) => f === p);
+    }
+    // main hand, other hand, main hand
+    expect(hits).toEqual([29, 18, 29, 17, 28, 17]);
+  });
+
+  it('four slashes in a row are 炫風斬 with two blades too, and the two share the wear', () => {
+    const w = setup();
+    const p = give(w, WID.Saber, 30);
+    p.weapon2 = WID.Bamboo;
+    p.wn2 = 18;
+    for (let i = 0; i < TWIN.chain - 1; i++) {
+      press(w, Btn.A);
+      run(w, 20);
+    }
+    press(w, Btn.A);
+    run(w, 6);
+    expect(p.st).toBe(St.Whirl);
+    run(w, TWIN.dur + 20);
+    expect(p.st).not.toBe(St.Whirl);
+    expect(p.wn).toBe(30 - TWIN.cost / 2);
+    expect(p.wn2).toBe(18 - TWIN.cost / 2);
+  });
+
+  it('B throws the other hand blade first, then the main one', () => {
+    const w = setup();
+    const p = give(w, WID.Saber, 30);
+    p.weapon2 = WID.Bamboo;
+    p.wn2 = 18;
+    press(w, Btn.B);
+    run(w, 40);
+    expect([p.weapon, p.weapon2]).toEqual([WID.Saber, 0]);
+    expect(w.items.map((i) => [i.kind, i.n])).toEqual([[WID.Bamboo, 18]]);
+    press(w, Btn.B);
+    run(w, 40);
+    expect(p.weapon).toBe(0);
+    expect(w.items.length).toBe(2);
+  });
+
+  it('when the main blade breaks, the other one takes its place', () => {
+    const w = setup();
+    const p = give(w, WID.Saber, 1);
+    p.weapon2 = WID.Bamboo;
+    p.wn2 = 18;
+    const e = foe(w, 22, 0, 'saburo', 'grunt', 9999);
+    e.aiT = 99999;
+    press(w, Btn.A);
+    run(w, 24);
+    expect([p.weapon, p.wn, p.weapon2]).toEqual([WID.Bamboo, 18, 0]);
+  });
+
+  it('both blades fall when the hero is knocked down', () => {
+    const w = setup();
+    const p = give(w, WID.Saber, 30);
+    p.weapon2 = WID.Bamboo;
+    p.wn2 = 18;
+    hit(w, p, -1, 3, 1, true, 2, 1);
+    expect([p.weapon, p.weapon2]).toEqual([0, 0]);
+    expect(w.items.map((i) => i.kind).sort()).toEqual([WID.Bamboo, WID.Saber].sort());
   });
 });

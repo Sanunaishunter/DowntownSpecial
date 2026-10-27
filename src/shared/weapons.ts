@@ -1,4 +1,4 @@
-export const WID = { None: 0, Stick: 1, Bamboo: 2, Stone: 3, Saber: 4, Rifle: 5, Gatling: 6 } as const;
+export const WID = { None: 0, Stick: 1, Bamboo: 2, Stone: 3, Saber: 4, Rifle: 5, Gatling: 6, Twin: 7 } as const;
 
 /** Item kind of the 1UP the general drops: picked up by walking over it, never held. */
 export const ITEM_1UP = 100;
@@ -66,7 +66,22 @@ export const WEAPONS: Record<number, WeaponDef> = {
     atk: { start: 5, active: 4, total: 20, dmg: 12, reach: 26, kbx: 1.5, knock: false, launch: 2.0, stun: 20 },
     throwable: false, throwDmg: 0, throwVx: 0, dropWeight: 10, bossWeight: 50,
   },
+  [WID.Twin]: {
+    id: WID.Twin, name: '雙劍', mode: 'melee', uses: 40,
+    atk: { start: 3, active: 4, total: 14, dmg: 15, reach: 38, kbx: 1.4, knock: false, launch: 2.2, stun: 20 },
+    throwable: false, throwDmg: 0, throwVx: 0, dropWeight: 10, bossWeight: 50,
+  },
 };
+
+/**
+ * 雙劍 (a blade in each hand): `chain` slashes in a row (each one started within `window` ticks of the last one ending)
+ * turn into 炫風斬: the hero spreads both arms and spins like a top for `dur` ticks. He can still walk (`speed` x), cannot
+ * be interrupted, and hits both sides every `gap` ticks. The blades lose `cost` uses once it is over.
+ */
+/** Blades that can be held two at a time, one in each hand. */
+export const BLADES: number[] = [WID.Bamboo, WID.Saber];
+
+export const TWIN = { chain: 4, window: 20, dur: 600, gap: 8, dmg: 4, reach: 34, speed: 1, cost: 8 };
 
 /**
  * 手持式加特靈機關槍: hold A to spray. Every shot heats the barrel; at `red` shots in a row it glows red, at `overheat`

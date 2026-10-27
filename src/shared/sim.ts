@@ -3,7 +3,7 @@ import { DEFS, PLAYER_DEFS } from './defs';
 import { AURA, BARRAGE, BEAM, ENEMY_HALO, HALO, MP_MAX, SHIELD, SP, SPECIALS, TATSU, THUNDER, VOLLEY } from './specials';
 import { STAGE, type WaveDef } from './stage';
 import { St, type Fighter, type PlayerInput, type Snapshot, type World } from './types';
-import { BULLET, GATLING, ITEM_1UP, ITEM_TONIC, SHURIKEN, UNLIMITED, WEAPONS, WID, type AtkDef } from './weapons';
+import { BLADES, BULLET, GATLING, ITEM_1UP, ITEM_TONIC, SHURIKEN, TWIN, UNLIMITED, WEAPONS, WID, type AtkDef } from './weapons';
 
 const PEND_WINDOW = 3;
 const UPPER_WINDOW = 12;
@@ -29,6 +29,7 @@ const ATK: Record<number, AtkDef> = {
   [St.HoldSwing]: { start: 6, active: 5, total: 24, dmg: 12, reach: 30, kbx: 1.8, knock: true, launch: 2.4, stun: 0 },
   [St.Stomp]: { start: 4, active: 3, total: 20, dmg: 8, reach: 14, kbx: 0, knock: false, launch: 0, stun: 0 },
   [St.Barrage]: { start: 2, active: BARRAGE.punches * BARRAGE.gap, total: 2 + BARRAGE.punches * BARRAGE.gap + 2, dmg: 3, reach: 24, kbx: 0.3, knock: false, launch: 0, stun: 18 },
+  [St.Whirl]: { start: 4, active: TWIN.dur, total: 4 + TWIN.dur + 6, dmg: TWIN.dmg, reach: TWIN.reach, kbx: 0.3, knock: false, launch: 0, stun: 16 },
   [St.Tatsu]: { start: TATSU.rise, active: TATSU.total - TATSU.rise - TATSU.fall, total: TATSU.total, dmg: 5, reach: 26, kbx: 0.6, knock: false, launch: 0, stun: 18 },
 };
 
@@ -36,6 +37,7 @@ const ATK: Record<number, AtkDef> = {
 const MULTI: Record<number, { gap: number; both?: boolean }> = {
   [St.Barrage]: { gap: BARRAGE.gap },
   [St.Tatsu]: { gap: TATSU.gap, both: true },
+  [St.Whirl]: { gap: TWIN.gap, both: true },
 };
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
@@ -86,11 +88,15 @@ function mkFighter(w: World, def: string, slot: number, x: number, y: number): F
     bufT: 0,
     tapDir: 0,
     tapT: 0,
+    slash: 0,
+    slashT: 0,
     jumpT: 0,
     cd: 0,
     aiT: 0,
     lastSlot: -1,
     wn: 0,
+    weapon2: 0,
+    wn2: 0,
     mp: 0,
     volley: 0,
     volleyCd: 0,
@@ -220,6 +226,7 @@ function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
   const d = DEFS[f.def];
   if (f.inv > 0) f.inv--;
   if (f.tapT > 0) f.tapT--;
+  if (f.slashT > 0) f.slashT--;
   for (let i = 0; i < f.sp.length; i++) if (f.sp[i] > 0) f.sp[i]--;
   if (f.aura > 0) f.aura--;
   if (f.shield > 0) f.shield--;
@@ -316,6 +323,12 @@ function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
   }
   if (f.storm > 0) tickStorm(w, f);
   tickHeat(w, f);
+  if (f.st === St.Whirl) {
+    // 炫風斬: the spin does not stop the hero walking about
+    f.vx = dx * d.walk * TWIN.speed;
+    f.vy = dy * d.walk * 0.7 * TWIN.speed;
+    if (dx) f.face = dx > 0 ? 1 : -1;
+  }
   if (f.weapon === WID.Gatling) {
     // the gun keeps spraying while A is held, and stops when it is let go, empty or jammed
     if (f.st === St.Shoot && (!(held & Btn.A) || f.wn <= 0 || f.heatCd > 0)) setSt(f, St.Idle);
@@ -367,8 +380,16 @@ function resolveAction(w: World, f: Fighter, a: boolean, b: boolean, dx: number)
   }
   if (f.weapon) {
     const wd = WEAPONS[f.weapon];
+    const mate = !b && BLADES.includes(f.weapon) && !f.weapon2 ? nearestItem(w, f, BLADES) : undefined;
     if (b) throwWeapon(w, f);
-    else if (wd.mode === 'ranged' && f.wn > 0 && !(f.weapon === WID.Gatling && f.heatCd > 0)) setSt(f, St.Shoot);
+    else if (mate) {
+      // a blade in hand and another one at the feet: take it in the other hand
+      w.items = w.items.filter((x) => x !== mate);
+      f.weapon2 = mate.kind;
+      f.wn2 = mate.n;
+      setSt(f, St.Pick);
+    } else if (wd.mode === 'ranged' && f.wn > 0 && !(f.weapon === WID.Gatling && f.heatCd > 0)) setSt(f, St.Shoot);
+    else if (dualWield(f)) slashTwin(f);
     else setSt(f, St.Swing);
     f.vx = 0;
     f.vy = 0;
@@ -410,6 +431,29 @@ function resolveAction(w: World, f: Fighter, a: boolean, b: boolean, dx: number)
   f.vy = 0;
 }
 
+/** 雙劍 or two blades, one in each hand. */
+function dualWield(f: Fighter) {
+  return f.weapon === WID.Twin || f.weapon2 !== 0;
+}
+
+/** With two blades the hands take turns: the first slash of a chain is the main hand's, the second the other's, and so on. */
+function otherHand(f: Fighter) {
+  return f.weapon2 !== 0 && (f.slash & 1) === 0;
+}
+
+/** 雙劍 / 雙持: every slash that follows the last one closely enough counts towards the chain; the last one of it is 炫風斬. */
+function slashTwin(f: Fighter) {
+  f.slash = f.slashT > 0 ? f.slash + 1 : 1;
+  if (f.slash >= TWIN.chain) {
+    f.slash = 0;
+    f.slashT = 0;
+    setSt(f, St.Whirl);
+  } else {
+    setSt(f, St.Swing);
+    f.slashT = WEAPONS[otherHand(f) ? f.weapon2 : f.weapon].atk.total + TWIN.window;
+  }
+}
+
 function nearestDowned(w: World, f: Fighter): Fighter | undefined {
   let best: Fighter | undefined;
   let bd = 1e9;
@@ -427,9 +471,9 @@ function nearestDowned(w: World, f: Fighter): Fighter | undefined {
   return best;
 }
 
-function nearestItem(w: World, f: Fighter) {
+function nearestItem(w: World, f: Fighter, kinds?: number[]) {
   for (const it of w.items) {
-    if (it.owner || it.z > 1 || it.kind >= ITEM_1UP) continue;
+    if (it.owner || it.z > 1 || it.kind >= ITEM_1UP || (kinds && !kinds.includes(it.kind))) continue;
     if (Math.abs(it.x - f.x) <= 16 && Math.abs(it.y - f.y) <= 9) return it;
   }
   return undefined;
@@ -437,11 +481,15 @@ function nearestItem(w: World, f: Fighter) {
 
 /** B: throw the weapon away. Throwing ones fly and hurt; the rest are just tossed a little way so another can be picked up. */
 function throwWeapon(w: World, f: Fighter) {
-  const wd = WEAPONS[f.weapon];
+  // with two blades the one in the other hand goes first
+  const second = f.weapon2 !== 0;
+  const kind = second ? f.weapon2 : f.weapon;
+  const n = second ? f.wn2 : f.wn;
+  const wd = WEAPONS[kind];
   setSt(f, St.Throw);
   w.items.push({
     id: w.nextId++,
-    kind: f.weapon,
+    kind,
     x: f.x + f.face * 8,
     y: f.y,
     z: f.z + 14,
@@ -449,10 +497,15 @@ function throwWeapon(w: World, f: Fighter) {
     vy: 0,
     vz: wd.throwable ? 0.8 : 0.5,
     owner: wd.throwable ? f.slot + 1 : 0,
-    n: f.wn,
+    n,
   });
-  f.weapon = 0;
-  f.wn = 0;
+  if (second) {
+    f.weapon2 = 0;
+    f.wn2 = 0;
+  } else {
+    f.weapon = 0;
+    f.wn = 0;
+  }
 }
 
 function throwHeld(w: World, f: Fighter) {
@@ -653,6 +706,23 @@ function updateBody(w: World, f: Fighter) {
     case St.Tatsu:
       updateTatsu(f);
       break;
+    case St.Whirl:
+      if (f.t >= ATK[St.Whirl].total) {
+        f.vx = 0;
+        f.vy = 0;
+        setSt(f, St.Idle);
+        if (f.weapon2) {
+          // two blades share the wear
+          f.wn2 -= TWIN.cost / 2;
+          f.wn -= TWIN.cost / 2;
+          if (f.wn2 <= 0) breakWeapon(w, f, true);
+          if (f.wn <= 0) breakWeapon(w, f);
+        } else {
+          f.wn -= TWIN.cost;
+          if (f.wn <= 0) breakWeapon(w, f);
+        }
+      }
+      break;
     case St.HoldSwing:
       f.vx = 0;
       f.vy = 0;
@@ -723,6 +793,8 @@ function die(w: World, f: Fighter) {
     s.rt = 0;
     f.weapon = 0;
     f.wn = 0;
+    f.weapon2 = 0;
+    f.wn2 = 0;
     f.mp = 0;
     f.volley = 0;
     f.aura = 0;
@@ -739,9 +811,9 @@ function die(w: World, f: Fighter) {
 // ---------- combat ----------
 
 /** `chain`: part of a flurry (or a spray), so being hit again and again never counts towards the three-hit knockdown. */
-function hit(w: World, t: Fighter, srcSlot: number, dmg: number, kbx: number, knock: boolean, launch: number, dir: number, chain = false) {
+export function hit(w: World, t: Fighter, srcSlot: number, dmg: number, kbx: number, knock: boolean, launch: number, dir: number, chain = false) {
   // 百裂拳 and 龍捲風腳 cannot be interrupted: the hits still hurt, unless they would be lethal
-  const firm = isPlayer(t) && (t.st === St.Barrage || t.st === St.Tatsu);
+  const firm = isPlayer(t) && (t.st === St.Barrage || t.st === St.Tatsu || t.st === St.Whirl);
   if (isPlayer(t) && (t.shield > 0 || firm)) {
     // 聖盾: a third of the damage and no flinching, unless it would still be lethal
     if (t.shield > 0) dmg = Math.max(1, Math.round(dmg / (1 + SHIELD.def)));
@@ -765,6 +837,11 @@ function hit(w: World, t: Fighter, srcSlot: number, dmg: number, kbx: number, kn
       w.items.push({ id: w.nextId++, kind: t.weapon, x: t.x, y: t.y, z: t.z, vx: 0, vy: 0, vz: 0, owner: 0, n: t.wn });
       t.weapon = 0;
       t.wn = 0;
+    }
+    if (t.weapon2) {
+      w.items.push({ id: w.nextId++, kind: t.weapon2, x: t.x + 8, y: t.y, z: t.z, vx: 0, vy: 0, vz: 0, owner: 0, n: t.wn2 });
+      t.weapon2 = 0;
+      t.wn2 = 0;
     }
     if (t.volley) {
       t.volley = 0;
@@ -875,21 +952,32 @@ function updateItems(w: World) {
 
 function atkFor(f: Fighter): AtkDef | undefined {
   if (f.st === St.Swing) {
-    const wd = WEAPONS[f.weapon];
+    const wd = WEAPONS[otherHand(f) ? f.weapon2 : f.weapon];
     if (wd) return wd.atk;
   }
   return ATK[f.st];
 }
 
 function useWeapon(w: World, f: Fighter) {
-  const wd = WEAPONS[f.weapon];
+  const second = otherHand(f);
+  const wd = WEAPONS[second ? f.weapon2 : f.weapon];
   if (!wd || wd.mode === 'ranged' || wd.uses >= UNLIMITED) return;
-  if (--f.wn <= 0) breakWeapon(w, f);
+  if (second) {
+    if (--f.wn2 <= 0) breakWeapon(w, f, true);
+  } else if (--f.wn <= 0) breakWeapon(w, f);
 }
 
-function breakWeapon(w: World, f: Fighter) {
-  f.weapon = 0;
-  f.wn = 0;
+/** A blade wears out: the other hand's one (`second`) just goes, or the main hand's goes and the other blade moves over. */
+function breakWeapon(w: World, f: Fighter, second = false) {
+  if (second) {
+    f.weapon2 = 0;
+    f.wn2 = 0;
+  } else {
+    f.weapon = f.weapon2;
+    f.wn = f.wn2;
+    f.weapon2 = 0;
+    f.wn2 = 0;
+  }
   w.ev.push([f.x + f.face * 10, f.y, f.z + 16, 2]);
 }
 
@@ -932,7 +1020,7 @@ function specialActive(f: Fighter) {
 function canStartSpecial(f: Fighter, id: number) {
   if (f.hp <= 0 || f.sp[id] > 0 || f.holding) return false;
   if (f.st === St.Hurt || f.st === St.Down || f.st === St.GetUp || f.st === St.Dead || f.st === St.Held || f.st === St.Stomp) return false;
-  if (id === SP.Beam) return f.z === 0 && f.st !== St.Beam && f.st !== St.Barrage && f.st !== St.Tatsu;
+  if (id === SP.Beam) return f.z === 0 && f.st !== St.Beam && f.st !== St.Barrage && f.st !== St.Tatsu && f.st !== St.Whirl;
   if (id === SP.Shield) return f.z === 0 && f.st !== St.Beam;
   return true;
 }
@@ -1323,9 +1411,11 @@ export function snapshot(w: World): Snapshot {
       m: f.maxHp,
       em: f.mpMax,
       w: f.weapon,
+      w2: f.weapon2,
       v: f.inv,
       e: Math.round(f.mp),
       n: f.wn,
+      n2: f.wn2,
       c: f.cast,
       ht: f.heatCd > 0 ? 500 + Math.ceil(f.heatCd / 60) : f.heat,
       b: (f.storm > 0 ? 16 : 0) | (f.aura > 0 ? 1 : 0) | (f.shield > 0 ? 2 : 0) | (f.halo > 0 ? 4 : 0) | ((f.aura > 0 && f.aura < 120) || (f.shield > 0 && f.shield < 120) ? 8 : 0),
