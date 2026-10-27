@@ -57,6 +57,13 @@ SHEETS = [
          ref="tready", main_only=True, split="components", grow=0, skip=["twhirl1", "twhirl2"]),
     # the sixth pose's blades touch the fifth cell, so it is cut out of the sheet by hand
     dict(file="sheet-twin-whirl.jpg", grid=(1, 1), names=["twhirl2"], scale_from="sheet-twin.jpg", main_only=True),
+    dict(file="sheet-bow.jpg", grid=(3, 2), names=["yu_ready", "yu_draw", "yu_rel", "yu_follow", "yu_aim", "yu_pick"],
+         scale_from="sheet-twin.jpg", main_only=True, split="components", grow=0, skip=["yu_follow", "yu_aim", "yu_pick"]),
+    dict(file="sheet-naginata.jpg", grid=(3, 2), names=["na_ready", "na_wind", "na_slash", "na_spin", "na_smash", "na_pick"],
+         scale_from="sheet-twin.jpg", main_only=True, split="components", grow=0, clean_grid=True,
+         skip=["na_slash", "na_pick"]),
+    dict(file="sheet-raikiri.jpg", grid=(3, 2), names=["ra_ready", "ra_wind", "ra_slash", "ra_low", "ra_sky", "ra_pick"],
+         scale_from="sheet-twin.jpg", main_only=True, skip=["ra_sky", "ra_pick"]),
     dict(file="sheet-blades.jpg", grid=(3, 2), names=["bready", "bwind", "bstrike", "sready", "sstrike", "swind"],
          scale_from="sheet-special.jpg", main_only=True, split="components", grow=0, auto_gain=True),
     dict(file="sheet-heavy.jpg", grid=(3, 2), names=["stcarry", "stwind", "stsmash", "rready", "rfire", "rbash"],
@@ -101,6 +108,17 @@ PALETTE = [
     ("steel_dark", (108, 120, 140)),
     ("gold", (226, 178, 52)),
     ("grip", (112, 26, 30)),
+    ("feather", (236, 148, 36)),
+    ("feather_dark", (176, 92, 24)),
+    ("feather_gold", (252, 206, 76)),
+    ("teal", (62, 170, 168)),
+    ("teal_dark", (30, 70, 66)),
+    ("fire_green", (130, 230, 70)),
+    ("fire_dark", (60, 150, 56)),
+    ("fire_light", (210, 255, 150)),
+    ("iron", (50, 50, 58)),
+    ("cord_blue", (44, 76, 150)),
+    ("glow", (150, 240, 255)),
     ("nj_body", (34, 41, 63)),
     ("nj_body_dark", (15, 21, 34)),
     ("nj_body_hi", (56, 62, 84)),
@@ -133,8 +151,18 @@ ENTRY_SCOPE = {
     "gunwood_dark": ["rready", "rfire", "rbash"],
 }
 TWIN_POSES = ["tready", "twind", "tslash1", "tslash2", "twhirl2"]
+# the three divine weapons: 遠古長弓 (yu_), 鬼火雙頭薙刀 (na_), 雷切 (ra_)
+BOW_POSES = ["yu_ready", "yu_draw", "yu_rel"]
+NAGI_POSES = ["na_ready", "na_wind", "na_smash", "na_spin"]
+RAI_POSES = ["ra_ready", "ra_wind", "ra_slash", "ra_low"]
 for _n in ("steel", "steel_dark", "gold", "grip"):
-    ENTRY_SCOPE[_n] = TWIN_POSES
+    ENTRY_SCOPE[_n] = TWIN_POSES + NAGI_POSES + RAI_POSES
+for _n in ("feather", "feather_dark", "feather_gold", "teal", "teal_dark"):
+    ENTRY_SCOPE[_n] = BOW_POSES
+for _n in ("fire_green", "fire_dark", "fire_light", "iron"):
+    ENTRY_SCOPE[_n] = NAGI_POSES
+for _n in ("cord_blue", "glow"):
+    ENTRY_SCOPE[_n] = RAI_POSES
 NINJA_POSES = ["n_idle", "n_walk1", "n_walk2", "n_wind", "n_punch", "n_kick", "n_hurt", "n_fly", "n_lying", "n_getup", "n_rush", "n_kick2"]
 for _n in ("nj_body", "nj_body_dark", "nj_body_hi", "nj_red", "nj_red_dark", "nj_metal", "nj_metal_dark"):
     ENTRY_SCOPE[_n] = NINJA_POSES
@@ -171,10 +199,10 @@ BASE_FRAMES = [
 # Armed stances per weapon suffix: the upper body of the "ready" frame is grafted onto
 # the legs of each locomotion frame. _w = stick, _w2 = bamboo sword, _w4 = energy sword.
 ARMED_BASES = ["walk1", "walk2", "walk3", "run1", "run2", "jump"]
-ARMED_SETS = {"_w": "idle_w", "_w2": "bready", "_w3": "stcarry", "_w4": "sready", "_w5": "rready", "_w7": "tready"}
+ARMED_SETS = {"_w": "idle_w", "_w2": "bready", "_w3": "stcarry", "_w4": "sready", "_w5": "rready", "_w7": "tready", "_w8": "yu_ready", "_w9": "na_ready", "_w10": "ra_ready"}
 ARMED = [f"{b}{suf}" for suf in ARMED_SETS for b in ARMED_BASES]
 # the twin swords' own poses come last so that every earlier frame keeps its number
-FRAME_ORDER = BASE_FRAMES + ARMED + TWIN_POSES
+FRAME_ORDER = BASE_FRAMES + ARMED + TWIN_POSES + BOW_POSES + NAGI_POSES + RAI_POSES
 
 # anim name -> frames (by pose name) and per-frame duration in game ticks
 ANIMS = {
@@ -207,7 +235,7 @@ ANIMS = {
     "shoot": (["windup", "punch", "windup"], [2, 6, 2]),
 }
 LOOPING = {"walk", "run", "hold"}
-for _suf, _idle in (("_w", "idle_w"), ("_w2", "bready"), ("_w3", "stcarry"), ("_w4", "sready"), ("_w5", "rready"), ("_w7", "tready")):
+for _suf, _idle in (("_w", "idle_w"), ("_w2", "bready"), ("_w3", "stcarry"), ("_w4", "sready"), ("_w5", "rready"), ("_w7", "tready"), ("_w8", "yu_ready"), ("_w9", "na_ready"), ("_w10", "ra_ready")):
     ANIMS[f"idle{_suf}"] = ([_idle], [60])
     ANIMS[f"walk{_suf}"] = ([f"walk1{_suf}", f"walk2{_suf}", f"walk3{_suf}", f"walk2{_suf}"], [8, 8, 8, 8])
     ANIMS[f"run{_suf}"] = ([f"run1{_suf}", f"run2{_suf}"], [4, 4])
@@ -220,6 +248,10 @@ ANIMS["swing_w3"] = (["stwind", "stsmash", "stsmash"], [8, 4, 16])
 ANIMS["swing_w5"] = (["rbash", "rbash", "rready"], [4, 3, 9])
 ANIMS["swing_w7"] = (["twind", "tslash1", "tslash2"], [3, 4, 7])
 ANIMS["whirl"] = (["twhirl2"], [60])
+ANIMS["shoot_w8"] = (["yu_draw", "yu_rel"], [7, 5])
+ANIMS["swing_w9"] = (["na_wind", "na_smash", "na_ready"], [6, 6, 10])
+ANIMS["staff_w9"] = (["na_spin"], [60])
+ANIMS["swing_w10"] = (["ra_wind", "ra_slash", "ra_low"], [4, 4, 8])
 ANIMS["shoot_w5"] = (["rready", "rfire", "rready"], [2, 6, 2])
 LOOP_FROM = {"beam": 2}  # after the last frame, repeat from this frame index
 
@@ -510,6 +542,18 @@ def auto_outline(frame: np.ndarray) -> np.ndarray:
     return out
 
 
+def erase_grid_lines(im: np.ndarray) -> np.ndarray:
+    """Paint over the dark divider lines some generated sheets have between their cells."""
+    out = im.copy()
+    bg = np.median(np.concatenate([im[:6].reshape(-1, 3), im[-6:].reshape(-1, 3)]), axis=0)
+    dark = im.sum(-1) < 160
+    for x in np.nonzero(dark.mean(axis=0) > 0.85)[0]:
+        out[:, max(0, x - 4):x + 5] = bg
+    for y in np.nonzero(dark.mean(axis=1) > 0.85)[0]:
+        out[max(0, y - 4):y + 5, :] = bg
+    return out
+
+
 def build_frames():
     frames, scales = {}, {}
     sash = NAMES.index("sash")
@@ -520,11 +564,13 @@ def build_frames():
             im = np.clip(im * sh["gain"], 0, 255).astype(np.int32)
         if sh.get("auto_gain"):
             im = auto_gain(im)
+        if sh.get("clean_grid"):
+            im = erase_grid_lines(im)
         if sh.get("split") == "components":
             poses = split_components(key_background(im), sh["grid"], names, sh.get("grow", 1))
         else:
             poses = split_poses(key_background(im), sh["grid"], names)
-        missing = [n for n in names if not poses[n].any()]
+        missing = [n for n in names if not poses[n].any() and n not in sh.get("skip", [])]
         if missing:
             sys.exit(f"{fname}: could not find poses {missing}")
         if "ref" in sh:

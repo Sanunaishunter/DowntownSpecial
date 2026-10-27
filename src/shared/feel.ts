@@ -5,7 +5,7 @@ export const CRIT = { chance: 0.1, mult: 2 };
 export const COMBO = { keep: 80 };
 
 /** The hero shouts the name of a special move for `dur` ticks, in a speech bubble. Codes: 1-4 moves, 10 + id for the six specials. */
-export const CRY = { dur: 75, barrage: 1, tatsu: 2, whirl: 3, upper: 4, special: 10, traitor: 20, traitorDur: 130 };
+export const CRY = { dur: 75, barrage: 1, tatsu: 2, whirl: 3, upper: 4, special: 10, traitor: 20, traitorDur: 130, charge: 30, awaken: 31, staff: 40 };
 
 export const CRY_TEXT: Record<number, string> = {
   [CRY.barrage]: '百裂拳！',
@@ -19,8 +19,21 @@ export const CRY_TEXT: Record<number, string> = {
   [CRY.special + 4]: '聖盾！',
   [CRY.special + 5]: '天雷萬鈞！',
   [CRY.traitor]: '讓他下課！',
+  [CRY.charge]: '啊啊啊啊——！',
+  [CRY.awaken]: '金光覺醒！',
+  [CRY.staff]: '鬼火旋舞！',
 };
 
 /** Event kinds for the damage numbers: the 5th element of the event is the damage. */
 export const EV_DAMAGE = 6;
 export const EV_CRIT = 7;
+
+/**
+ * 集氣: with empty hands, standing still and holding A for `start` ticks (3 s) the hero starts gathering energy; at `full` (10 s)
+ * his hair turns gold and for `goldDur` (30 s) his health and mana caps are doubled.
+ */
+export const CHARGE = { start: 180, full: 600, goldDur: 1800 };
+/** Event kind for the flash of the awakening. */
+export const EV_AWAKEN = 8;
+/** Event kind for a small lightning that jumps to an enemy (雷切). */
+export const EV_ZAP = 9;

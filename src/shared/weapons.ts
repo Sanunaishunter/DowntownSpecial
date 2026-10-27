@@ -1,4 +1,4 @@
-export const WID = { None: 0, Stick: 1, Bamboo: 2, Stone: 3, Saber: 4, Rifle: 5, Gatling: 6, Twin: 7 } as const;
+export const WID = { None: 0, Stick: 1, Bamboo: 2, Stone: 3, Saber: 4, Rifle: 5, Gatling: 6, Twin: 7, Bow: 8, Naginata: 9, Raikiri: 10 } as const;
 
 /** Item kind of the 1UP the general drops: picked up by walking over it, never held. */
 export const ITEM_1UP = 100;
@@ -15,6 +15,8 @@ export interface AtkDef {
   knock: boolean;
   launch: number;
   stun: number;
+  /** hits enemies behind as well as in front */
+  both?: boolean;
 }
 
 export interface WeaponDef {
@@ -71,17 +73,45 @@ export const WEAPONS: Record<number, WeaponDef> = {
     atk: { start: 3, active: 4, total: 14, dmg: 15, reach: 38, kbx: 1.4, knock: false, launch: 2.2, stun: 20 },
     throwable: false, throwDmg: 0, throwVx: 0, dropWeight: 10, bossWeight: 50,
   },
+  // the three divine weapons (神兵): rare; only the bow wears out (500 arrows)
+  [WID.Bow]: {
+    id: WID.Bow, name: '遠古長弓', mode: 'ranged', uses: 500,
+    atk: { start: 5, active: 3, total: 14, dmg: 6, reach: 24, kbx: 1.0, knock: false, launch: 2.0, stun: 20 },
+    throwable: false, throwDmg: 0, throwVx: 0, dropWeight: 4, bossWeight: 40,
+  },
+  [WID.Naginata]: {
+    id: WID.Naginata, name: '鬼火雙頭薙刀', mode: 'melee', uses: UNLIMITED,
+    atk: { start: 6, active: 5, total: 22, dmg: 16, reach: 42, kbx: 1.4, knock: false, launch: 2.2, stun: 18, both: true },
+    throwable: false, throwDmg: 0, throwVx: 0, dropWeight: 4, bossWeight: 40,
+  },
+  [WID.Raikiri]: {
+    id: WID.Raikiri, name: '雷切', mode: 'melee', uses: UNLIMITED,
+    atk: { start: 4, active: 4, total: 16, dmg: 20, reach: 46, kbx: 1.6, knock: false, launch: 2.2, stun: 18 },
+    throwable: false, throwDmg: 0, throwVx: 0, dropWeight: 4, bossWeight: 40,
+  },
 };
+
+/** Blades that can be held two at a time, one in each hand. */
+export const BLADES: number[] = [WID.Bamboo, WID.Saber];
 
 /**
  * 雙劍 (a blade in each hand): `chain` slashes in a row (each one started within `window` ticks of the last one ending)
  * turn into 炫風斬: the hero spreads both arms and spins like a top for `dur` ticks. He can still walk (`speed` x), cannot
  * be interrupted, and hits both sides every `gap` ticks. The blades lose `cost` uses once it is over.
  */
-/** Blades that can be held two at a time, one in each hand. */
-export const BLADES: number[] = [WID.Bamboo, WID.Saber];
-
 export const TWIN = { chain: 4, window: 20, dur: 600, gap: 8, dmg: 4, reach: 34, speed: 1, cost: 8 };
+
+/**
+ * 遠古長弓: hold A to keep drawing and loosing 靈氣箭. The string is drawn for `draw` ticks, then the arrow goes (one arrow
+ * every `gap - 1` ticks). It steers towards the nearest enemy within `range`, turning at most `turn` radians a tick.
+ */
+export const BOW = { gap: 12, draw: 7, speed: 4.6, life: 90, dmg: 10, range: 140, turn: 0.13, kbx: 0.8, muzzleX: 18, muzzleZ: 20 };
+
+/** 鬼火雙頭薙刀: sets what it hits alight (`burnDmg` every `burnGap` ticks for `burn` ticks) and heals the wielder `heal` of max health per hit. */
+export const NAGINATA = { burn: 180, burnGap: 30, burnDmg: 3, heal: 0.03 };
+
+/** 雷切: the lightning jumps to `chainCount` more enemies within `chainRange` (`chainMul` of the damage); every `every`th hit a bolt falls from the sky. */
+export const RAIKIRI = { chainRange: 64, chainCount: 2, chainMul: 0.4, every: 5, boltDmg: 28, boltRadius: 24 };
 
 /**
  * 手持式加特靈機關槍: hold A to spray. Every shot heats the barrel; at `red` shots in a row it glows red, at `overheat`
@@ -90,3 +120,11 @@ export const TWIN = { chain: 4, window: 20, dur: 600, gap: 8, dmg: 4, reach: 34,
 export const GATLING = { gap: 3, red: 300, overheat: 500, rest: 600, cool: 4, dmg: 4, speed: 8, life: 34, kbx: 0.5, muzzleX: 26, muzzleZ: 20 };
 
 export const BULLET = { speed: 7, life: 40, dmg: 7, kbx: 0.8, muzzleX: 22, muzzleZ: 20 };
+
+/**
+ * 鬼火旋舞 (the naginata, like the Monkey King spinning his staff): a swing sometimes turns into a spin instead, with `chance`.
+ * For `dur` ticks the staff whirls in front of the hero like a wheel: it hits both sides every `gap` ticks, burns them, burns
+ * away throwing stars and arrows that come near (`deflect` pixels), cannot be interrupted, and he walks on at `speed` x.
+ * The next spin comes no sooner than `cooldown` ticks after this one began.
+ */
+export const STAFF = { chance: 0.2, cooldown: 300, dur: 100, gap: 5, dmg: 5, reach: 44, speed: 0.6, heal: 0.01, deflect: 26 };

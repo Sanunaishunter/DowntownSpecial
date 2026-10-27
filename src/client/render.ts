@@ -1,6 +1,6 @@
 import { SCREEN_H, SCREEN_W, STAGE_W } from '../shared/constants';
 import { ONSEN } from '../shared/onsen';
-import { CRY_TEXT, EV_CRIT, EV_DAMAGE } from '../shared/feel';
+import { CRY_TEXT, EV_AWAKEN, EV_CRIT, EV_DAMAGE, EV_ZAP } from '../shared/feel';
 import { DEFS } from '../shared/defs';
 import { BEAM, HALO, MP_MAX, SPECIALS } from '../shared/specials';
 import { St, type GameEvent, type SnapFighter, type SnapItem, type Snapshot } from '../shared/types';
@@ -40,6 +40,7 @@ export class Renderer {
   private sprites = new PixelSprites();
   private buffT0 = new Map<string, number>();
   private fxCanvas = document.createElement('canvas');
+  private goldCanvas = document.createElement('canvas');
   private lap = 0;
   private stg = 0;
   private shakeT0 = -1e9;
@@ -72,7 +73,7 @@ export class Renderer {
   addFx(events: GameEvent[], now: number) {
     for (const e of events) {
       this.fx.push({ x: e[0], y: e[1], z: e[2], k: e[3], t0: now, v: e[4] ?? 0 });
-      if (e[3] === EV_CRIT) this.shakeT0 = now;
+      if (e[3] === EV_CRIT || e[3] === EV_AWAKEN) this.shakeT0 = now;
     }
     if (this.fx.length > 110) this.fx.splice(0, this.fx.length - 110);
   }
@@ -90,7 +91,8 @@ export class Renderer {
     ctx.imageSmoothingEnabled = false;
     const cam = snap ? snap.c : 0;
     // a critical hit shakes the whole picture for a moment
-    const shake = Math.max(0, 1 - (o.now - this.shakeT0) / 170);
+    const charging = snap?.f.some((f) => f.b & 1024 && f.ch > 150) ?? false;
+    const shake = Math.max(charging ? 0.3 : 0, 1 - (o.now - this.shakeT0) / 170);
     const shx = Math.round(Math.sin(o.now * 0.09) * 3 * shake);
     const shy = Math.round(Math.cos(o.now * 0.13) * 2.5 * shake);
     ctx.translate(shx, shy);
@@ -114,13 +116,17 @@ export class Renderer {
         ctx.fillStyle = `rgba(255,255,255,${0.32 * (1 - age / 90)})`;
         ctx.fillRect(0, 0, VW, SCREEN_H);
       }
+      if (e.k === EV_AWAKEN && age < 500) {
+        ctx.fillStyle = `rgba(255,238,160,${0.55 * (1 - age / 500)})`;
+        ctx.fillRect(-4, -4, VW + 8, SCREEN_H + 8);
+      }
       if (e.k === EV_CRIT && age < 110) {
         ctx.fillStyle = `rgba(255,236,190,${0.22 * (1 - age / 110)})`;
         ctx.fillRect(-4, -4, VW + 8, SCREEN_H + 8);
       }
     }
 
-    for (const it of snap.it) drawItem(ctx, it, cam, o.now);
+    for (const it of snap.it) drawItem(ctx, it, cam, o.now, this.assets);
 
     for (const f of snap.f) {
       const key = `${f.i}:circle`;
@@ -133,13 +139,15 @@ export class Renderer {
     const fs = [...snap.f].sort((a, b) => a.y - b.y);
     for (const f of fs) this.drawFighter(f, cam, o.now);
     for (const f of fs) if (f.s === St.Beam) drawBeam(ctx, f, cam, o.now);
-    for (const s of snap.sh) drawShot(ctx, s, cam, o.now);
+    for (const s of snap.sh) drawShot(ctx, s, cam, o.now, this.assets);
 
-    this.fx = this.fx.filter((e) => o.now - e.t0 < (e.k === 4 ? 280 : e.k === 5 ? 800 : e.k === EV_DAMAGE ? 650 : e.k === EV_CRIT ? 950 : 200));
+    this.fx = this.fx.filter((e) => o.now - e.t0 < (e.k === 4 ? 280 : e.k === 5 ? 800 : e.k === EV_DAMAGE ? 650 : e.k === EV_CRIT ? 950 : e.k === EV_ZAP ? 260 : e.k === EV_AWAKEN ? 800 : 200));
     for (const e of this.fx) {
       if (e.k === 4) drawBolt(ctx, e, cam, (o.now - e.t0) / 280);
       else if (e.k === 5) drawSplash(ctx, e, cam, (o.now - e.t0) / 800);
       else if (e.k === EV_DAMAGE || e.k === EV_CRIT) drawDamage(ctx, e, cam, o.now - e.t0);
+      else if (e.k === EV_ZAP) drawZap(ctx, e, cam, (o.now - e.t0) / 260);
+      else if (e.k === EV_AWAKEN) drawAwaken(ctx, e, cam, (o.now - e.t0) / 800);
       else drawSpark(ctx, e, cam, (o.now - e.t0) / 200);
     }
     // special moves are shouted out loud
@@ -234,7 +242,10 @@ export class Renderer {
     };
     const auraMs = since('aura', !!(f.b & 1));
     const shieldMs = since('shield', !!(f.b & 2));
-    if (f.b & 1) this.drawAura(f, ox, oy, now, auraMs);
+    const chargeMs = since('charge', !!(f.b & 1024));
+    const goldMs = since('gold', !!(f.b & 512));
+    if (f.b & 1024) this.drawChargeFx(f, ox, oy, now, chargeMs);
+    if (f.b & 513) this.drawAura(f, ox, oy, now, f.b & 1 ? auraMs : goldMs);
     const tatsu = f.s === St.Tatsu;
     const whirl = f.s === St.Whirl;
     if (tatsu) drawTornado(ctx, ox, oy - Math.round(f.z), f.t, true);
@@ -247,13 +258,88 @@ export class Renderer {
     // 龍捲風腳 / 炫風斬: the body spins around its own axis, which on a flat sprite is a quick flip
     const spin = tatsu ? Math.cos(f.t * 0.95) : whirl ? Math.cos(f.t * 0.6) : 1;
     ctx.scale(f.r * (tatsu || whirl ? (Math.abs(spin) < 0.25 ? 0.25 * Math.sign(spin || 1) : spin) : 1), 1);
-    this.paint(ctx, f);
+    if (f.b & 512) this.paintGold(ctx, f);
+    else this.paint(ctx, f);
     ctx.restore();
+    if (f.b & 256) drawBurn(ctx, ox, oy - Math.round(f.z), now, f.i);
+    if (f.s === St.Staff) drawStaffSpin(ctx, ox, oy - Math.round(f.z), now);
     if (tatsu) drawTornado(ctx, ox, oy - Math.round(f.z), f.t, false);
     if (whirlGfx) drawWhirl(ctx, ox, oy - Math.round(f.z), f.t, true, blades);
     if (f.s === St.Barrage) drawBarrage(ctx, ox, oy - Math.round(f.z), f.r, f.t);
     if (f.w === WID.Gatling && f.ht > GATLING.overheat) drawSteam(ctx, ox + f.r * 38, oy - Math.round(f.z) - 21, now);
     if (f.b & 2) drawShield(ctx, ox + f.r * 15, oy - Math.round(f.z), shieldMs, now, !!(f.b & 8));
+  }
+
+  // 金光覺醒: the hair of the golden form. The figure is drawn on a small canvas first, and the dark pixels inside the top of the
+  // head (the hair, not its outline and not the eyes) are painted gold.
+  private paintGold(ctx: CanvasRenderingContext2D, f: SnapFighter) {
+    const W = 96;
+    const H = 96;
+    const ax = 48;
+    const ay = 76;
+    const c = this.goldCanvas;
+    if (c.width !== W) {
+      c.width = W;
+      c.height = H;
+    }
+    const g = c.getContext('2d', { willReadFrequently: true })!;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, W, H);
+    g.imageSmoothingEnabled = false;
+    g.save();
+    g.translate(ax, ay);
+    this.paint(g, f);
+    g.restore();
+    const img = g.getImageData(0, 0, W, H);
+    const d = img.data;
+    const solid = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < H && d[(y * W + x) * 4 + 3] > 0;
+    const dark = (x: number, y: number) => {
+      const i = (y * W + x) * 4;
+      return d[i + 3] > 0 && d[i] + d[i + 1] + d[i + 2] < 120;
+    };
+    const out: number[] = [];
+    for (let y = ay - 40; y <= ay - 29; y++) {
+      for (let x = 0; x < W; x++) {
+        if (dark(x, y) && solid(x - 1, y) && solid(x + 1, y) && solid(x, y - 1) && solid(x, y + 1)) out.push(x, y);
+      }
+    }
+    for (let k = 0; k < out.length; k += 2) {
+      const x = out[k];
+      const y = out[k + 1];
+      const i = (y * W + x) * 4;
+      const hi = ((x + y * 2) & 3) === 0;
+      d[i] = hi ? 255 : 246;
+      d[i + 1] = hi ? 238 : 196;
+      d[i + 2] = hi ? 120 : 40;
+    }
+    g.putImageData(img, 0, 0);
+    ctx.drawImage(c, -ax, -ay);
+  }
+
+  // 集氣: a blue-white aura that grows with the charge, pebbles lifted off the ground, and rings of light on the floor.
+  private drawChargeFx(f: SnapFighter, ox: number, oy: number, now: number, ms: number) {
+    const ctx = this.ctx;
+    const k = Math.min(1, f.ch / 420);
+    const baseY = oy - Math.round(f.z);
+    ctx.save();
+    for (let r = 0; r < 3; r++) {
+      const p = ((now / 700 + r / 3) % 1);
+      ctx.strokeStyle = `rgba(190,230,255,${(1 - p) * (0.35 + 0.4 * k)})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.ellipse(ox, baseY, 8 + p * (16 + 14 * k), 3 + p * (6 + 5 * k), 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#7a6a58';
+    for (let i = 0; i < 6 + Math.round(8 * k); i++) {
+      const life = (now / 900 + i * 0.173 + f.i * 0.21) % 1;
+      const px = ox + Math.round(Math.sin(i * 7.7 + f.i) * (10 + 10 * k));
+      const py = baseY - 1 - Math.round(life * (22 + 24 * k));
+      ctx.globalAlpha = 1 - life * 0.7;
+      ctx.fillRect(px, py, 2, 2);
+    }
+    ctx.restore();
+    this.drawAura(f, ox, oy, now, ms, 'charge', 0.35 + 0.65 * k);
   }
 
   // Draws the fighter at the origin of an already translated and flipped context.
@@ -264,12 +350,13 @@ export class Renderer {
     if (drawn === 0) this.sprites.draw(ctx, f.d, f.s, f.t, f.w);
     else if (drawn === 1 && f.w === WID.Stick && (f.s === St.Idle || f.s === St.Walk || f.s === St.Run || f.s === St.Jump)) drawHeldStick(ctx, f.s, f.t);
     if (!hasArt) drawWeaponInHand(ctx, f);
-    else if (f.s === St.Shoot && f.t >= 2 && f.t <= 5) drawMuzzleFlash(ctx, this.assets.muzzle(f.d));
+    else if (f.s === St.Shoot && f.t >= 2 && f.t <= 5 && f.w !== WID.Bow) drawMuzzleFlash(ctx, this.assets.muzzle(f.d));
   }
 
   // 爆氣: a flickering gold outline around the whole body plus flames rising from it.
-  private drawAura(f: SnapFighter, ox: number, oy: number, now: number, ms: number) {
+  private drawAura(f: SnapFighter, ox: number, oy: number, now: number, ms: number, kind: 'gold' | 'charge' = 'gold', power = 1) {
     const ctx = this.ctx;
+    const col = kind === 'charge' ? { fill: '#a8dcff', flame: '#7cc8ff', core: '#ffffff', spark: '#d8f0ff' } : { fill: '#ffd23a', flame: '#ffb81c', core: '#fff2a0', spark: '#fff6b0' };
     const fade = f.b & 8 ? 0.45 + 0.4 * Math.sin(now / 45) : 1;
     const fx = this.fxCanvas;
     const W = 112;
@@ -288,7 +375,7 @@ export class Renderer {
     this.paint(g, f);
     g.restore();
     g.globalCompositeOperation = 'source-in';
-    g.fillStyle = '#ffd23a';
+    g.fillStyle = col.fill;
     g.fillRect(0, 0, W, H);
     g.globalCompositeOperation = 'source-over';
     const pulse = 2 + Math.round(Math.sin(now / 55) + Math.sin(now / 37));
@@ -296,29 +383,29 @@ export class Renderer {
     const y0 = oy - (H - 20);
     ctx.save();
     // flame tongues licking up behind the body
-    ctx.globalAlpha = 0.7 * fade * Math.min(1, ms / 150);
+    ctx.globalAlpha = 0.7 * fade * Math.min(1, ms / 150) * power;
     const base = oy - Math.round(f.z) - 10;
     for (let i = 0; i < 7; i++) {
       const bx = ox + (i - 3) * 5;
       const hgt = 16 + Math.round(10 * Math.sin(now / 70 + i * 1.9)) + (i % 2 ? 6 : 0) - Math.abs(i - 3) * 2;
-      ctx.fillStyle = '#ffb81c';
+      ctx.fillStyle = col.flame;
       ctx.beginPath();
       ctx.moveTo(bx - 4, base);
       ctx.lineTo(bx + 4, base);
       ctx.lineTo(bx + (i % 3) - 1, base - hgt - 14);
       ctx.fill();
-      ctx.fillStyle = '#fff2a0';
+      ctx.fillStyle = col.core;
       ctx.beginPath();
       ctx.moveTo(bx - 2, base);
       ctx.lineTo(bx + 2, base);
       ctx.lineTo(bx, base - hgt - 4);
       ctx.fill();
     }
-    ctx.globalAlpha = 0.6 * fade * Math.min(1, ms / 150);
+    ctx.globalAlpha = 0.6 * fade * Math.min(1, ms / 150) * power;
     for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1]]) {
       ctx.drawImage(fx, x0 + dx * (pulse + 2), y0 + dy * (pulse + 2) - 1);
     }
-    ctx.globalAlpha = 0.75 * fade;
+    ctx.globalAlpha = 0.75 * fade * power;
     ctx.drawImage(fx, x0 + 0, y0 - 1);
     // flames: deterministic particles that rise and shrink
     for (let k = 0; k < 14; k++) {
@@ -326,7 +413,7 @@ export class Renderer {
       const px = ox + Math.round(Math.sin(k * 12.9898 + f.i) * 12) + Math.round(Math.sin(life * 6 + k) * 2);
       const py = oy - Math.round(f.z) - 2 - Math.round(life * 40);
       const sz = life < 0.35 ? 3 : life < 0.7 ? 2 : 1;
-      ctx.fillStyle = life < 0.5 ? '#fff6b0' : '#ffc030';
+      ctx.fillStyle = life < 0.5 ? col.spark : col.flame;
       ctx.fillRect(px - 1, py, sz, sz + 1);
     }
     ctx.restore();
@@ -649,6 +736,82 @@ function drawBanner(ctx: CanvasRenderingContext2D, code: number, ticks: number) 
   ctx.restore();
 }
 
+// 鬼火旋舞: the staff turns like a wheel in front of the hero; the picture has the ring, this spins bright streaks around it.
+function drawStaffSpin(ctx: CanvasRenderingContext2D, ox: number, oy: number, now: number) {
+  ctx.save();
+  ctx.translate(ox, oy - 25);
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 3; i++) {
+    const a0 = now / 90 + (i * Math.PI * 2) / 3;
+    for (const [r, w, c] of [[24, 3, 'rgba(120,235,70,0.55)'], [24, 1.5, 'rgba(235,255,190,0.95)']] as const) {
+      ctx.strokeStyle = c;
+      ctx.lineWidth = w;
+      ctx.beginPath();
+      ctx.arc(0, 0, r, a0, a0 + 0.9);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+// 鬼火: green flames licking up the body of what the naginata has set alight.
+function drawBurn(ctx: CanvasRenderingContext2D, ox: number, oy: number, now: number, seed: number) {
+  ctx.save();
+  for (let k = 0; k < 9; k++) {
+    const life = (now / 520 + k * 0.111 + seed * 0.17) % 1;
+    const px = ox + Math.round(Math.sin(k * 5.3 + seed) * 8);
+    const py = oy - 4 - Math.round(life * 34);
+    const sz = life < 0.4 ? 3 : life < 0.75 ? 2 : 1;
+    ctx.globalAlpha = 1 - life * 0.6;
+    ctx.fillStyle = life < 0.5 ? '#d2ff96' : '#82e646';
+    ctx.fillRect(px - 1, py, sz, sz + 1);
+    ctx.fillStyle = '#3c9a38';
+    ctx.fillRect(px, py + sz, 1, 1);
+  }
+  ctx.restore();
+}
+
+// 雷切: a small lightning that jumps down onto an enemy.
+function drawZap(ctx: CanvasRenderingContext2D, e: Fx, cam: number, k: number) {
+  const x = Math.round(e.x - cam);
+  const y = Math.round(e.y);
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, 1 - k);
+  const pts: [number, number][] = [];
+  for (let i = 0; i <= 6; i++) pts.push([x + (i % 2 ? 4 : -4) * (i > 0 && i < 6 ? 1 : 0) + Math.round(Math.sin(e.t0 + i) * 2), y - 44 + i * 6]);
+  ctx.lineJoin = 'round';
+  for (const [w, c] of [[4, 'rgba(120,190,255,0.5)'], [2, '#ffffff']] as const) {
+    ctx.strokeStyle = c;
+    ctx.lineWidth = w;
+    ctx.beginPath();
+    pts.forEach(([px, py], i) => (i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// 金光覺醒: a golden ring of light spreading from the hero.
+function drawAwaken(ctx: CanvasRenderingContext2D, e: Fx, cam: number, k: number) {
+  const x = Math.round(e.x - cam);
+  const y = Math.round(e.y);
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, 1 - k);
+  ctx.strokeStyle = '#ffe070';
+  ctx.lineWidth = 3;
+  for (let i = 0; i < 2; i++) {
+    const r = (k * 70 + i * 16) % 80;
+    ctx.beginPath();
+    ctx.ellipse(x, y, r + 6, (r + 6) * 0.35, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#fff6b0';
+  for (let i = 0; i < 14; i++) {
+    const a = (i / 14) * Math.PI * 2;
+    ctx.fillRect(Math.round(x + Math.cos(a) * (6 + k * 60)), Math.round(y - 12 - k * 28 + Math.sin(a) * 6), 2, 2);
+  }
+  ctx.restore();
+}
+
 function shadow(ctx: CanvasRenderingContext2D, x: number, y: number, z: number, rx: number) {
   const r = Math.max(4, rx - z / 6);
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
@@ -664,6 +827,7 @@ function artFor(f: SnapFighter, hasArt: boolean): { weapon: number; anim?: strin
   if (f.s === St.Beam) return { weapon: 0, anim: f.t >= BEAM.charge + BEAM.fire ? 'beamend' : 'beam', t: f.t };
   if (f.s === St.Barrage) return { weapon: 0, anim: 'punch', t: f.t % 12 };
   if (f.s === St.Tatsu) return { weapon: 0, anim: 'kick', t: 7 };
+  if (f.s === St.Charge) return { weapon: 0, anim: 'beam', t: f.t % 24 };
   if (f.s === St.Whirl) return hasArt ? { weapon: 0, anim: 'whirl', t: f.t } : { weapon: 0, anim: 'idle', t: 0 };
   if ((f.s === St.Idle || f.s === St.Walk || f.s === St.Run) && f.c > 0) return { weapon: 0, anim: 'cast', t: 0 };
   if (!f.w) return { weapon: 0, t: f.t };
@@ -828,7 +992,7 @@ function drawWeaponInHand(ctx: CanvasRenderingContext2D, f: SnapFighter) {
   ctx.restore();
 }
 
-function drawItem(ctx: CanvasRenderingContext2D, it: SnapItem, cam: number, now: number) {
+function drawItem(ctx: CanvasRenderingContext2D, it: SnapItem, cam: number, now: number, assets: Assets) {
   const sx = Math.round(it.x - cam);
   const sy = Math.round(it.y);
   shadow(ctx, sx, sy, it.z, 7);
@@ -838,6 +1002,22 @@ function drawItem(ctx: CanvasRenderingContext2D, it: SnapItem, cam: number, now:
   }
   if (it.k === ITEM_TONIC) {
     drawTonic(ctx, sx, sy - Math.round(it.z), now);
+    return;
+  }
+  const icon = assets.icon(it.k);
+  if (icon) {
+    // the divine weapons lie on the ground with a glint now and then
+    ctx.save();
+    ctx.translate(sx, sy - 4 - Math.round(it.z));
+    if (it.k === WID.Bow) ctx.rotate(Math.PI / 2);
+    ctx.drawImage(icon, -Math.floor(icon.width / 2), -Math.floor(icon.height / 2));
+    ctx.restore();
+    if (Math.floor(now / 260) % 4 === 0) {
+      ctx.fillStyle = '#ffffff';
+      const gx = sx - 8 + ((it.i * 7) % 16);
+      ctx.fillRect(gx, sy - 9 - Math.round(it.z), 1, 3);
+      ctx.fillRect(gx - 1, sy - 8 - Math.round(it.z), 3, 1);
+    }
     return;
   }
   ctx.save();
@@ -891,9 +1071,28 @@ function drawTonic(ctx: CanvasRenderingContext2D, x: number, y: number, now: num
   }
 }
 
-function drawShot(ctx: CanvasRenderingContext2D, s: { k: number; x: number; y: number; z: number; r: 1 | -1 }, cam: number, now: number) {
+function drawShot(ctx: CanvasRenderingContext2D, s: { k: number; x: number; y: number; z: number; r: 1 | -1; a?: number }, cam: number, now: number, assets: Assets) {
   const sx = Math.round(s.x - cam);
   const sy = Math.round(s.y - s.z);
+  if (s.k === 4) {
+    // 靈氣箭: the golden arrow, turned the way it is flying, with a teal glow behind it
+    const a = s.a ?? (s.r > 0 ? 0 : Math.PI);
+    const icon = assets.icon('arrow');
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(a);
+    ctx.fillStyle = 'rgba(80,220,210,0.35)';
+    ctx.fillRect(-18, -1, 14, 2);
+    if (icon) ctx.drawImage(icon, -Math.floor(icon.width * 0.7), -Math.floor(icon.height / 2));
+    else {
+      ctx.fillStyle = '#ffd060';
+      ctx.fillRect(-12, -1, 14, 2);
+      ctx.fillStyle = '#fff6b0';
+      ctx.fillRect(2, -2, 4, 4);
+    }
+    ctx.restore();
+    return;
+  }
   if (s.k === 3) {
     ctx.fillStyle = 'rgba(255,190,70,0.5)';
     ctx.fillRect(s.r > 0 ? sx - 12 : sx + 4, sy, 9, 1);
@@ -1245,7 +1444,7 @@ function drawHud(ctx: CanvasRenderingContext2D, snap: Snapshot, o: DrawOpts) {
     const name = DEFS[f?.d ?? ''] ? DEFS[f!.d].name : `P${i + 1}`;
     text(ctx, name + (i === o.mySlot ? ' ◀' : ''), x, 3);
     bar(ctx, x, 14, hpW, f ? f.h : 0, f ? f.m : 1);
-    energyBar(ctx, x, 21, mpW, f ? f.e : 0, o.now, !!f && (f.b & 3) !== 0);
+    energyBar(ctx, x, 21, mpW, f ? f.e : 0, o.now, !!f && (f.b & 515) !== 0);
     if (f) {
       // one pip per special: lit = ready, dark = cooling down
       SPECIALS.forEach((sp, n) => {

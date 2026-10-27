@@ -492,7 +492,7 @@
       },
       "idle_w7": {
         "frames": [
-          90
+          108
         ],
         "ticks": [
           60
@@ -527,6 +527,132 @@
       "jump_w7": {
         "frames": [
           89
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "idle_w8": {
+        "frames": [
+          113
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w8": {
+        "frames": [
+          90,
+          91,
+          92,
+          91
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w8": {
+        "frames": [
+          93,
+          94
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w8": {
+        "frames": [
+          95
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "idle_w9": {
+        "frames": [
+          116
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w9": {
+        "frames": [
+          96,
+          97,
+          98,
+          97
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w9": {
+        "frames": [
+          99,
+          100
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w9": {
+        "frames": [
+          101
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "idle_w10": {
+        "frames": [
+          120
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w10": {
+        "frames": [
+          102,
+          103,
+          104,
+          103
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w10": {
+        "frames": [
+          105,
+          106
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w10": {
+        "frames": [
+          107
         ],
         "ticks": [
           60
@@ -582,9 +708,9 @@
       },
       "swing_w7": {
         "frames": [
-          91,
-          92,
-          93
+          109,
+          110,
+          111
         ],
         "ticks": [
           3,
@@ -594,10 +720,52 @@
       },
       "whirl": {
         "frames": [
-          94
+          112
         ],
         "ticks": [
           60
+        ]
+      },
+      "shoot_w8": {
+        "frames": [
+          114,
+          115
+        ],
+        "ticks": [
+          7,
+          5
+        ]
+      },
+      "swing_w9": {
+        "frames": [
+          117,
+          118,
+          116
+        ],
+        "ticks": [
+          6,
+          6,
+          10
+        ]
+      },
+      "staff_w9": {
+        "frames": [
+          119
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "swing_w10": {
+        "frames": [
+          121,
+          122,
+          123
+        ],
+        "ticks": [
+          4,
+          4,
+          8
         ]
       },
       "shoot_w5": {
@@ -1111,7 +1279,7 @@
       },
       "idle_w7": {
         "frames": [
-          90
+          108
         ],
         "ticks": [
           60
@@ -1146,6 +1314,132 @@
       "jump_w7": {
         "frames": [
           89
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "idle_w8": {
+        "frames": [
+          113
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w8": {
+        "frames": [
+          90,
+          91,
+          92,
+          91
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w8": {
+        "frames": [
+          93,
+          94
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w8": {
+        "frames": [
+          95
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "idle_w9": {
+        "frames": [
+          116
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w9": {
+        "frames": [
+          96,
+          97,
+          98,
+          97
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w9": {
+        "frames": [
+          99,
+          100
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w9": {
+        "frames": [
+          101
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "idle_w10": {
+        "frames": [
+          120
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w10": {
+        "frames": [
+          102,
+          103,
+          104,
+          103
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w10": {
+        "frames": [
+          105,
+          106
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w10": {
+        "frames": [
+          107
         ],
         "ticks": [
           60
@@ -1201,9 +1495,9 @@
       },
       "swing_w7": {
         "frames": [
-          91,
-          92,
-          93
+          109,
+          110,
+          111
         ],
         "ticks": [
           3,
@@ -1213,10 +1507,52 @@
       },
       "whirl": {
         "frames": [
-          94
+          112
         ],
         "ticks": [
           60
+        ]
+      },
+      "shoot_w8": {
+        "frames": [
+          114,
+          115
+        ],
+        "ticks": [
+          7,
+          5
+        ]
+      },
+      "swing_w9": {
+        "frames": [
+          117,
+          118,
+          116
+        ],
+        "ticks": [
+          6,
+          6,
+          10
+        ]
+      },
+      "staff_w9": {
+        "frames": [
+          119
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "swing_w10": {
+        "frames": [
+          121,
+          122,
+          123
+        ],
+        "ticks": [
+          4,
+          4,
+          8
         ]
       },
       "shoot_w5": {
@@ -1730,7 +2066,7 @@
       },
       "idle_w7": {
         "frames": [
-          90
+          108
         ],
         "ticks": [
           60
@@ -1765,6 +2101,132 @@
       "jump_w7": {
         "frames": [
           89
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "idle_w8": {
+        "frames": [
+          113
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w8": {
+        "frames": [
+          90,
+          91,
+          92,
+          91
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w8": {
+        "frames": [
+          93,
+          94
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w8": {
+        "frames": [
+          95
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "idle_w9": {
+        "frames": [
+          116
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w9": {
+        "frames": [
+          96,
+          97,
+          98,
+          97
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w9": {
+        "frames": [
+          99,
+          100
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w9": {
+        "frames": [
+          101
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "idle_w10": {
+        "frames": [
+          120
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w10": {
+        "frames": [
+          102,
+          103,
+          104,
+          103
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w10": {
+        "frames": [
+          105,
+          106
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w10": {
+        "frames": [
+          107
         ],
         "ticks": [
           60
@@ -1820,9 +2282,9 @@
       },
       "swing_w7": {
         "frames": [
-          91,
-          92,
-          93
+          109,
+          110,
+          111
         ],
         "ticks": [
           3,
@@ -1832,10 +2294,52 @@
       },
       "whirl": {
         "frames": [
-          94
+          112
         ],
         "ticks": [
           60
+        ]
+      },
+      "shoot_w8": {
+        "frames": [
+          114,
+          115
+        ],
+        "ticks": [
+          7,
+          5
+        ]
+      },
+      "swing_w9": {
+        "frames": [
+          117,
+          118,
+          116
+        ],
+        "ticks": [
+          6,
+          6,
+          10
+        ]
+      },
+      "staff_w9": {
+        "frames": [
+          119
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "swing_w10": {
+        "frames": [
+          121,
+          122,
+          123
+        ],
+        "ticks": [
+          4,
+          4,
+          8
         ]
       },
       "shoot_w5": {
@@ -2273,5 +2777,27 @@
     "h": 224,
     "groundMin": 112,
     "groundMax": 140
+  },
+  "_icons": {
+    "8": {
+      "image": "gen/icon_8.png",
+      "w": 8,
+      "h": 36
+    },
+    "arrow": {
+      "image": "gen/icon_arrow.png",
+      "w": 26,
+      "h": 4
+    },
+    "9": {
+      "image": "gen/icon_9.png",
+      "w": 54,
+      "h": 10
+    },
+    "10": {
+      "image": "gen/icon_10.png",
+      "w": 46,
+      "h": 8
+    }
   }
 }

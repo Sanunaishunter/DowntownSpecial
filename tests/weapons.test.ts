@@ -1,10 +1,10 @@
-import { COMBO, CRIT, CRY, CRY_TEXT, EV_CRIT, EV_DAMAGE } from '../src/shared/feel';
+import { CHARGE, COMBO, CRIT, CRY, CRY_TEXT, EV_CRIT, EV_DAMAGE, EV_ZAP } from '../src/shared/feel';
 import { describe, expect, it } from 'vitest';
 import { Btn } from '../src/shared/constants';
 import { addPlayer, createWorld, enterOnsen, hit, snapshot, step } from '../src/shared/sim';
 import { AURA, BARRAGE, BEAM, ENEMY_HALO, HALO, MP_MAX, SHIELD, SP, SPECIALS, TATSU, THUNDER, VOLLEY } from '../src/shared/specials';
 import { St, type Fighter, type GameEvent, type PlayerInput, type World } from '../src/shared/types';
-import { GATLING, ITEM_1UP, ITEM_TONIC, TWIN, WEAPONS, WID } from '../src/shared/weapons';
+import { BOW, GATLING, ITEM_1UP, ITEM_TONIC, NAGINATA, RAIKIRI, STAFF, TWIN, WEAPONS, WID } from '../src/shared/weapons';
 import { DEFS } from '../src/shared/defs';
 import { STAGE } from '../src/shared/stage';
 import { ONSEN, STAGE_ONSEN, STAGE_TOKAIDO } from '../src/shared/onsen';
@@ -311,7 +311,7 @@ describe('drops', () => {
       for (let i = 0; i < 4; i++) step(w, [none, undefined]);
       for (const it of w.items) if (it.kind !== ITEM_TONIC) seen.add(it.kind);
     }
-    expect([...seen].sort()).toEqual([WID.Stick, WID.Bamboo, WID.Stone, WID.Saber, WID.Rifle, WID.Gatling, WID.Twin]);
+    expect([...seen].sort((x, y) => x - y)).toEqual(Object.values(WID).filter((k) => k > 0).sort((x, y) => x - y));
   });
 
   it('grunts sometimes drop a weapon', () => {
@@ -1641,5 +1641,285 @@ describe('the traitor', () => {
     expect(w.items.filter((i) => i.kind === WID.Twin).length).toBe(before + 1);
     // an ordinary elite does not leave them every time
     expect(w.fighters.filter((f) => f.elite === 1 && f.st === St.Dead).length).toBe(0);
+  });
+});
+
+describe('集氣', () => {
+  const hold = { held: Btn.A, pressed: 0 };
+
+  it('A held for three seconds with empty hands starts the power-up, ten seconds make the golden form with double caps', () => {
+    const w = setup();
+    const p = player(w);
+    const hp0 = p.maxHp;
+    const mp0 = p.mpMax;
+    p.hp = hp0 / 2;
+    run(w, CHARGE.start - 5, hold);
+    expect(p.st).toBe(St.Idle);
+    run(w, 10, hold);
+    expect(p.st).toBe(St.Charge);
+    const s = snapshot(w).f.find((f) => f.i === p.id)!;
+    expect(s.b & 1024).toBe(1024);
+    expect(s.ch).toBeGreaterThan(0);
+    expect(s.cr).toBe(CRY.charge);
+    run(w, CHARGE.full - CHARGE.start - 5, hold);
+    expect(p.gold).toBeGreaterThan(0);
+    expect(p.maxHp).toBe(hp0 * 2);
+    expect(p.mpMax).toBe(mp0 * 2);
+    expect(p.hp).toBe(hp0);
+    expect(p.st).toBe(St.Idle);
+    expect(snapshot(w).f.find((f) => f.i === p.id)!.b & 512).toBe(512);
+    expect(snapshot(w).f.find((f) => f.i === p.id)!.cr).toBe(CRY.awaken);
+    // it cannot be started again while it lasts, and it wears off after thirty seconds
+    run(w, CHARGE.start + 10, hold);
+    expect(p.st).toBe(St.Idle);
+    run(w, CHARGE.goldDur, none);
+    expect(p.gold).toBe(0);
+    expect(p.maxHp).toBe(hp0);
+    expect(p.mpMax).toBe(mp0);
+    expect(p.hp).toBeLessThanOrEqual(hp0);
+  });
+
+  it('letting go, moving, B, a weapon in hand, or a hit starts over', () => {
+    for (const stop of ['release', 'move', 'weapon', 'hit'] as const) {
+      const w = setup();
+      const p = player(w);
+      if (stop === 'weapon') give(w, WID.Stick, 5);
+      run(w, CHARGE.start + 20, hold);
+      if (stop === 'weapon') {
+        expect(p.st).not.toBe(St.Charge);
+        continue;
+      }
+      expect(p.st).toBe(St.Charge);
+      if (stop === 'release') run(w, 2, none);
+      if (stop === 'move') run(w, 2, { held: Btn.A | Btn.Right, pressed: 0 });
+      if (stop === 'hit') {
+        hit(w, p, -1, 3, 1, false, 0, 1);
+        run(w, 2, hold);
+      }
+      expect(p.st).not.toBe(St.Charge);
+      expect(p.charge).toBeLessThan(5);
+    }
+  });
+
+  it('the golden form ends when the hero falls', () => {
+    const w = setup();
+    const p = player(w);
+    const hp0 = p.maxHp;
+    run(w, CHARGE.full + 20, hold);
+    expect(p.gold).toBeGreaterThan(0);
+    hit(w, p, -1, 999999, 1, true, 2, 1);
+    run(w, 80);
+    expect(p.gold).toBe(0);
+    expect(p.maxHp).toBe(hp0);
+  });
+});
+
+describe('遠古長弓', () => {
+  it('draws, then looses a spirit arrow that curves towards an enemy standing off to the side', () => {
+    const w = setup();
+    const p = give(w, WID.Bow);
+    expect(p.wn).toBe(500);
+    const e = foe(w, 90, 16, 'saburo', 'grunt', 9999);
+    e.aiT = 99999;
+    e.face = 1;
+    press(w, Btn.A);
+    // nothing leaves the string while it is still being drawn
+    run(w, BOW.draw - 2, { held: Btn.A, pressed: 0 });
+    expect(w.shots.filter((s) => s.kind === 4).length).toBe(0);
+    let seen = false;
+    for (let i = 0; i < 60; i++) {
+      step(w, [{ held: Btn.A, pressed: 0 }, undefined]);
+      const arrow = snapshot(w).sh.find((s) => s.k === 4);
+      if (arrow) seen = true;
+    }
+    expect(seen).toBe(true);
+    expect(e.hp).toBeLessThan(9999);
+    expect(p.wn).toBeLessThan(500);
+  });
+
+  it('keeps firing while A is held, one arrow every ~11 ticks, and breaks after its 500th', () => {
+    const w = setup();
+    const p = give(w, WID.Bow, 3);
+    const e = foe(w, 60, 0, 'saburo', 'grunt', 99999);
+    e.aiT = 99999;
+    press(w, Btn.A);
+    run(w, 100, { held: Btn.A, pressed: 0 });
+    expect(p.weapon).toBe(0);
+    expect(w.fighters.includes(e)).toBe(true);
+    expect(99999 - e.hp).toBeGreaterThanOrEqual(2 * BOW.dmg);
+  });
+
+  it('an arrow flies past when nobody is near, and homes only within its range', () => {
+    const w = setup();
+    const p = give(w, WID.Bow);
+    const far = foe(w, 300, 20, 'saburo', 'grunt', 9999);
+    far.aiT = 99999;
+    press(w, Btn.A);
+    run(w, 60, { held: Btn.A, pressed: 0 });
+    expect(far.hp).toBe(9999);
+    expect(p.wn).toBeLessThan(500);
+  });
+});
+
+describe('鬼火雙頭薙刀', () => {
+  it('hits both sides with one swing, sets them alight, and heals the wielder', () => {
+    const w = setup();
+    const p = give(w, WID.Naginata);
+    p.hp = 40;
+    p.maxHp = 100;
+    const front = foe(w, 30, 0, 'saburo', 'grunt', 9999);
+    const back = foe(w, -30, 0, 'saburo', 'grunt', 9999);
+    for (const e of [front, back]) e.aiT = 99999;
+    press(w, Btn.A);
+    run(w, 24);
+    expect(front.hp).toBeLessThan(9999);
+    expect(back.hp).toBeLessThan(9999);
+    expect(front.burn).toBeGreaterThan(0);
+    expect(p.hp).toBeGreaterThanOrEqual(40 + Math.round(p.maxHp * NAGINATA.heal));
+    expect(snapshot(w).f.find((f) => f.i === front.id)!.b & 256).toBe(256);
+    // the fire keeps eating at them
+    const hp = front.hp;
+    run(w, NAGINATA.burn);
+    expect(front.hp).toBeLessThan(hp);
+    expect(front.burn).toBe(0);
+    expect(p.weapon).toBe(WID.Naginata);
+  });
+
+  it('a lethal burning tick knocks the enemy down properly', () => {
+    const w = setup();
+    const p = give(w, WID.Naginata);
+    const e = foe(w, 30, 0, 'saburo', 'grunt', 9999);
+    e.aiT = 99999;
+    e.burn = 100;
+    e.burnSlot = p.slot;
+    e.hp = 2;
+    run(w, 120);
+    expect(e.st === St.Dead || e.st === St.Down).toBe(true);
+    expect(e.hp).toBe(0);
+  });
+});
+
+describe('雷切', () => {
+  it('the lightning jumps to the nearest other enemies', () => {
+    const w = setup();
+    const p = give(w, WID.Raikiri);
+    const a = foe(w, 34, 0, 'saburo', 'grunt', 9999);
+    const b = foe(w, 60, 6, 'saburo', 'grunt', 9999);
+    const c = foe(w, 80, -6, 'saburo', 'grunt', 9999);
+    const far = foe(w, 200, 0, 'saburo', 'grunt', 9999);
+    for (const e of [a, b, c, far]) e.aiT = 99999;
+    press(w, Btn.A);
+    let zaps = 0;
+    for (let i = 0; i < 26; i++) {
+      step(w, [none, undefined]);
+      zaps += snapshot(w).ev.filter((e) => e[3] === EV_ZAP).length;
+    }
+    expect(a.hp).toBeLessThan(9999);
+    expect(b.hp).toBeLessThan(9999);
+    expect(c.hp).toBeLessThan(9999);
+    expect(far.hp).toBe(9999);
+    expect(zaps).toBe(3);
+    expect(p.weapon).toBe(WID.Raikiri);
+  });
+
+  it('every fifth hit calls a bolt down from the sky', () => {
+    const w = setup();
+    const p = give(w, WID.Raikiri);
+    const e = foe(w, 34, 0, 'saburo', 'grunt', 99999);
+    e.aiT = 99999;
+    let bolts = 0;
+    for (let n = 0; n < RAIKIRI.every; n++) {
+      e.x = p.x + 34;
+      e.st = St.Idle;
+      e.z = 0;
+      e.vx = 0;
+      press(w, Btn.A);
+      for (let i = 0; i < 24; i++) {
+        step(w, [none, undefined]);
+        bolts += snapshot(w).ev.filter((ev) => ev[3] === 4).length;
+      }
+    }
+    expect(bolts).toBe(1);
+    expect(p.zap).toBe(0);
+  });
+});
+
+describe('鬼火旋舞 (the naginata spins like a staff)', () => {
+  const withChance = (c: number, f: () => void) => {
+    const old = STAFF.chance;
+    STAFF.chance = c;
+    try {
+      f();
+    } finally {
+      STAFF.chance = old;
+    }
+  };
+
+  it('a swing sometimes becomes a spin: both sides are hit again and again, the hero walks on and cannot be flinched', () => {
+    withChance(1, () => {
+      const w = setup();
+      w.cam = 300;
+      const p = give(w, WID.Naginata);
+      p.x = 400;
+      const front = foe(w, 30, 0, 'saburo', 'grunt', 9999);
+      const back = foe(w, -30, 0, 'saburo', 'grunt', 9999);
+      for (const e of [front, back]) e.aiT = 99999;
+      press(w, Btn.A);
+      run(w, 6);
+      expect(p.st).toBe(St.Staff);
+      expect(snapshot(w).f.find((f) => f.i === p.id)!.cr).toBe(CRY.staff);
+      const x0 = p.x;
+      run(w, 60, { held: Btn.Right, pressed: 0 });
+      expect(p.x - x0).toBeGreaterThan(5);
+      expect(p.st).toBe(St.Staff);
+      expect(9999 - front.hp).toBeGreaterThanOrEqual(8 * STAFF.dmg);
+      expect(9999 - back.hp).toBeGreaterThanOrEqual(4 * STAFF.dmg);
+      expect(front.burn).toBeGreaterThan(0);
+      // a blow does not stop it
+      const hp = p.hp;
+      hit(w, p, -1, 3, 2, true, 2.4, 1);
+      expect(p.hp).toBe(hp - 3);
+      expect(p.st).toBe(St.Staff);
+      run(w, STAFF.dur + 20);
+      expect(p.st).toBe(St.Idle);
+    });
+  });
+
+  it('it burns away throwing stars and arrows, and does not come again right away', () => {
+    withChance(1, () => {
+      const w = setup();
+      const p = give(w, WID.Naginata);
+      press(w, Btn.A);
+      run(w, 5);
+      expect(p.st).toBe(St.Staff);
+      w.shots.push({ id: w.nextId++, kind: 2, x: p.x + 20, y: p.y, z: 20, vx: -3, owner: 0, life: 60 });
+      run(w, 3);
+      expect(w.shots.length).toBe(0);
+      run(w, STAFF.dur + 20);
+      // the cooldown: an immediate second try is only a plain swing
+      press(w, Btn.A);
+      run(w, 5);
+      expect(p.st).toBe(St.Swing);
+      expect(p.staffCd).toBeGreaterThan(0);
+    });
+  });
+
+  it('never happens with the dice at zero, and other weapons never spin', () => {
+    withChance(0, () => {
+      const w = setup();
+      const p = give(w, WID.Naginata);
+      for (let i = 0; i < 20; i++) {
+        press(w, Btn.A);
+        run(w, 30);
+        expect(p.st).not.toBe(St.Staff);
+      }
+    });
+    withChance(1, () => {
+      const w = setup();
+      const p = give(w, WID.Saber);
+      press(w, Btn.A);
+      run(w, 5);
+      expect(p.st).toBe(St.Swing);
+    });
   });
 });

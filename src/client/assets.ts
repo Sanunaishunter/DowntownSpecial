@@ -54,6 +54,7 @@ export class Assets {
   private sheets = new Map<string, Loaded>();
   private layers: { def: BackdropLayer; img: HTMLImageElement }[] = [];
   private onsen: HTMLImageElement | null = null;
+  private icons = new Map<string, HTMLImageElement>();
 
   async load() {
     try {
@@ -75,6 +76,22 @@ export class Assets {
         }),
       );
       if (backdrop) await this.loadBackdrop(backdrop);
+      const icons = (manifest as unknown as Record<string, Record<string, { image?: string }> | undefined>)._icons;
+      if (icons) {
+        await Promise.all(
+          Object.entries(icons).map(async ([name, def]) => {
+            if (typeof def?.image !== 'string') return;
+            const img = new Image();
+            img.src = `/assets/${def.image}`;
+            try {
+              await img.decode();
+              this.icons.set(name, img);
+            } catch {
+              /* drawn by code instead */
+            }
+          }),
+        );
+      }
       const onsen = (manifest as unknown as Record<string, { image?: string } | undefined>)._onsen;
       if (onsen && typeof onsen.image === 'string') {
         const img = new Image();
@@ -119,6 +136,11 @@ export class Assets {
       for (let x = x0; x < width; x += def.w) ctx.drawImage(img, x, y);
     }
     return true;
+  }
+
+  /** A weapon's picture (by weapon id, or 'arrow'); undefined when there is none. */
+  icon(name: string | number): HTMLImageElement | undefined {
+    return this.icons.get(String(name));
   }
 
   /** The one-screen picture of 溫泉關; false when it is not there. */

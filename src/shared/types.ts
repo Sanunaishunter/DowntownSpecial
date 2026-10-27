@@ -26,6 +26,8 @@ export const St = {
   Barrage: 24,
   Tatsu: 25,
   Whirl: 26,
+  Charge: 27,
+  Staff: 28,
 } as const;
 
 export const ST_NAMES: string[] = [];
@@ -73,6 +75,18 @@ export interface Fighter {
   /** hit counter: blows landed in a row, and the ticks left before it starts over */
   chain: number;
   chainT: number;
+  /** 集氣: ticks of A held down with empty hands, the ticks of the golden form left, and the health / mana caps that form added */
+  charge: number;
+  gold: number;
+  goldHp: number;
+  goldMp: number;
+  /** burning (鬼火): ticks left, and who set it alight */
+  burn: number;
+  burnSlot: number;
+  /** 雷切: blows since the last bolt from the sky */
+  zap: number;
+  /** 鬼火旋舞: ticks before the naginata may start its spin again */
+  staffCd: number;
   /** the move name being shouted (see CRY) and its ticks left */
   cry: number;
   cryT: number;
@@ -129,6 +143,8 @@ export interface Shot {
   y: number;
   z: number;
   vx: number;
+  /** sideways speed, only for the homing arrows */
+  vy?: number;
   owner: number;
   life: number;
 }
@@ -210,17 +226,21 @@ export interface SnapFighter {
   ht: number;
   /** 光環 circle: [x, y, ticks left] while it is on the ground, otherwise empty */
   hl: number[];
-  /** buffs: 1 aura, 2 shield, 4 halo light, 8 a buff is about to end, 16 lightning storm, 32 elite, 64 traitor, 128 scripted (envoy) */
+  /** buffs: 1 aura, 2 shield, 4 halo light, 8 a buff is about to end, 16 lightning storm, 32 elite, 64 traitor, 128 scripted (envoy), 256 burning, 512 golden form, 1024 charging */
   b: number;
   /** cooldown ticks left per special (players only, empty for everyone else) */
   k: number[];
   /** hit counter */
   cb: number;
+  /** 集氣 progress in ticks (0 when not charging) */
+  ch: number;
   /** the move name being shouted, 0 = none */
   cr: number;
 }
 
 export interface SnapShot {
+  /** direction in radians for the arrows */
+  a: number;
   k: number;
   x: number;
   y: number;
