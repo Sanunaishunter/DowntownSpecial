@@ -78,6 +78,9 @@ export interface Fighter {
   aura: number;
   shield: number;
   halo: number;
+  /** where the 光環 circle was cast */
+  haloX: number;
+  haloY: number;
   /** 天雷萬鈞 ticks left */
   storm: number;
   /** gatling: shots fired in this burst, and the rest ticks left once it has jammed */
@@ -169,6 +172,8 @@ export interface SnapFighter {
   c: number;
   /** gatling barrel: 0..500 = heat, 501..510 = jammed with that many seconds left */
   ht: number;
+  /** 光環 circle: [x, y, ticks left] while it is on the ground, otherwise empty */
+  hl: number[];
   /** buffs: 1 aura, 2 shield, 4 halo light, 8 a buff is about to end, 16 lightning storm */
   b: number;
   /** cooldown ticks left per special (players only, empty for everyone else) */

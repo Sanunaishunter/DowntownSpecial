@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Btn } from '../src/shared/constants';
 import { addPlayer, createWorld, snapshot, step } from '../src/shared/sim';
-import { AURA, BARRAGE, BEAM, ENEMY_HALO, MP_MAX, SHIELD, SP, SPECIALS, TATSU, THUNDER, VOLLEY } from '../src/shared/specials';
+import { AURA, BARRAGE, BEAM, ENEMY_HALO, HALO, MP_MAX, SHIELD, SP, SPECIALS, TATSU, THUNDER, VOLLEY } from '../src/shared/specials';
 import { St, type Fighter, type PlayerInput, type World } from '../src/shared/types';
 import { GATLING, ITEM_1UP, ITEM_TONIC, WEAPONS, WID } from '../src/shared/weapons';
 import { DEFS } from '../src/shared/defs';
@@ -385,18 +385,18 @@ describe('special buttons', () => {
     const w = setup();
     const p = player(w);
     press(w, Btn.S3);
-    p.hp = 10;
+    p.halo = 0;
     run(w, 5);
     press(w, Btn.S3);
-    expect(p.hp).toBe(10);
+    expect(p.halo).toBe(0);
     p.sp[SP.Halo] = 3;
     run(w, 1);
     press(w, Btn.S3);
-    expect(p.hp).toBe(10);
+    expect(p.halo).toBe(0);
     run(w, 1);
     expect(p.sp[SP.Halo]).toBe(0);
     press(w, Btn.S3);
-    expect(p.hp).toBe(p.maxHp);
+    expect(p.halo).toBe(HALO.dur);
     expect(p.sp[SP.Halo]).toBe(SPECIALS[SP.Halo].cooldown);
   });
 
@@ -447,15 +447,46 @@ describe('光環 / 爆氣 / 聖盾', () => {
     press(w, bit);
   };
 
-  it('光環 refills health at once', () => {
+  it('光環 puts a circle on the ground that heals 10% of max health a second', () => {
     const w = setup();
     const p = player(w);
     p.hp = 7;
     trigger(w, Btn.S3);
-    expect(p.hp).toBe(p.maxHp);
+    expect(p.hp).toBeLessThan(p.maxHp * 0.3);
     expect(p.halo).toBeGreaterThan(0);
     expect(p.mp).toBe(0);
     expect(p.sp[SP.Halo]).toBeGreaterThan(0);
+    const hl = snapshot(w).f.find((f) => f.i === p.id)!.hl;
+    expect(hl.length).toBe(3);
+    const before = p.hp;
+    run(w, 60);
+    expect(p.hp - before).toBeCloseTo(p.maxHp * 0.1, 1);
+    run(w, 600);
+    expect(p.hp).toBe(p.maxHp);
+    expect(p.halo).toBe(0);
+    expect(snapshot(w).f.find((f) => f.i === p.id)!.hl).toEqual([]);
+  });
+
+  it('光環 only heals whoever stays inside the circle, and only their own side', () => {
+    const w = setup();
+    const p = player(w);
+    p.hp = 10;
+    trigger(w, Btn.S3);
+    const friend = foe(w, 0);
+    friend.slot = 1;
+    friend.kind = 'player';
+    const grunt = foe(w, 0);
+    grunt.hp = 5;
+    grunt.maxHp = 100;
+    grunt.aiT = 99999;
+    grunt.sp[SP.Halo] = 99999;
+    grunt.halo = 0; // the helper copies the hero, circle and all
+    p.x += HALO.rx + 20; // walks out of the circle
+    p.vx = 0;
+    const out = p.hp;
+    run(w, 120);
+    expect(p.hp).toBe(out);
+    expect(grunt.hp).toBe(5);
   });
 
   it('爆氣 doubles damage for twenty seconds, then wears off', () => {
@@ -797,11 +828,12 @@ describe('enemy 光環', () => {
       if (e.halo > 0) healed = i;
     }
     expect(healed).toBeGreaterThanOrEqual(0);
-    expect(e.hp).toBe(30 + Math.ceil(100 * ENEMY_HALO.heal));
     expect(snapshot(w).f.find((f) => f.i === e.id)!.b & 4).toBe(4);
+    run(w, ENEMY_HALO.dur);
+    expect(e.hp).toBe(30 + 100 * 0.4);
     // hurt again right away: no second heal until the cooldown is over
     e.hp = 10;
-    run(w, ENEMY_HALO.cooldown - 60);
+    run(w, ENEMY_HALO.cooldown - ENEMY_HALO.dur - 60);
     expect(e.hp).toBe(10);
     run(w, 600);
     expect(e.hp).toBeGreaterThan(10);

@@ -81,6 +81,14 @@ export class Renderer {
 
     for (const it of snap.it) drawItem(ctx, it, cam, o.now);
 
+    for (const f of snap.f) {
+      const key = `${f.i}:circle`;
+      if (f.hl.length) {
+        if (!this.buffT0.has(key)) this.buffT0.set(key, o.now);
+        drawHaloCircle(ctx, Math.round(f.hl[0] - cam), Math.round(f.hl[1]), o.now - this.buffT0.get(key)!, f.hl[2], f.i);
+      } else this.buffT0.delete(key);
+    }
+
     const fs = [...snap.f].sort((a, b) => a.y - b.y);
     for (const f of fs) this.drawFighter(f, cam, o.now);
     for (const f of fs) if (f.s === St.Beam) drawBeam(ctx, f, cam, o.now);
@@ -127,10 +135,8 @@ export class Renderer {
       if (!this.buffT0.has(key)) this.buffT0.set(key, now);
       return now - this.buffT0.get(key)!;
     };
-    const haloMs = since('halo', !!(f.b & 4));
     const auraMs = since('aura', !!(f.b & 1));
     const shieldMs = since('shield', !!(f.b & 2));
-    if (f.b & 4) drawHaloLight(ctx, ox, oy, haloMs, (HALO.vis / 60) * 1000, f.i);
     if (f.b & 1) this.drawAura(f, ox, oy, now, auraMs);
     const tatsu = f.s === St.Tatsu;
     if (tatsu) drawTornado(ctx, ox, oy - Math.round(f.z), f.t, true);
@@ -224,41 +230,81 @@ export class Renderer {
   }
 }
 
-// 光環: a column of golden light falling from the sky onto the hero, with sparkles rising inside it.
-function drawHaloLight(ctx: CanvasRenderingContext2D, ox: number, oy: number, ms: number, total: number, seed: number) {
-  const drop = Math.min(1, ms / 220);
-  const fade = Math.min(1, Math.max(0, (total - ms) / 450));
-  const top = 0;
-  const bottom = oy + 2;
-  const h = Math.round((bottom - top) * drop);
-  const wob = Math.round(Math.sin(ms / 70) * 1.5);
+// 光環: a golden magic circle lying on the ground (drawn flat, so squashed to the ground's perspective), turning slowly.
+// `ms` is how long it has been there, `left` the ticks it has left.
+function drawHaloCircle(ctx: CanvasRenderingContext2D, cx: number, cy: number, ms: number, left: number, seed: number) {
+  const grow = Math.min(1, ms / 320);
+  const fade = Math.min(1, left / 45);
+  const R = HALO.rx * (0.4 + 0.6 * grow);
+  const squash = HALO.ry / HALO.rx;
+  const t = ms / 1000;
+  const pulse = 0.85 + 0.15 * Math.sin(ms / 140);
+  const poly = (n: number, r: number, a0: number, skip: number) => {
+    // a regular star {n/skip}
+    ctx.beginPath();
+    for (let k = 0; k <= n; k++) {
+      const a = a0 + ((k * skip) / n) * Math.PI * 2;
+      const x = Math.cos(a) * r;
+      const y = Math.sin(a) * r;
+      if (k === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  };
   ctx.save();
-  ctx.globalAlpha = fade;
-  const layers: [string, number][] = [
-    ['rgba(255,214,90,0.22)', 32 + wob * 2],
-    ['rgba(255,226,120,0.34)', 24 + wob],
-    ['rgba(255,240,170,0.5)', 16],
-    ['rgba(255,252,222,0.8)', 8],
-  ];
-  for (const [c, w] of layers) {
-    ctx.fillStyle = c;
-    ctx.fillRect(ox - Math.floor(w / 2), top, w, h);
-  }
-  // ground ring
-  if (drop >= 1) {
-    ctx.fillStyle = 'rgba(255,236,150,0.45)';
-    ctx.beginPath();
-    ctx.ellipse(ox, oy, 20 + wob, 5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,230,0.8)';
-    ctx.beginPath();
-    ctx.ellipse(ox, oy, 11, 3, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  ctx.globalAlpha = fade * grow;
+  ctx.translate(cx, cy);
+  ctx.scale(1, squash);
+  // soft golden glow on the ground
+  const g = ctx.createRadialGradient(0, 0, 0, 0, 0, R);
+  g.addColorStop(0, `rgba(255,244,190,${0.5 * pulse})`);
+  g.addColorStop(0.7, `rgba(255,210,80,${0.22 * pulse})`);
+  g.addColorStop(1, 'rgba(255,190,40,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.arc(0, 0, R, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineJoin = 'round';
+  // outer and inner ring
+  ctx.strokeStyle = `rgba(255,226,110,${0.95 * pulse})`;
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  ctx.arc(0, 0, R, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(0, 0, R * 0.84, 0, Math.PI * 2);
+  ctx.stroke();
+  // rune ticks between the two rings, turning the other way
+  ctx.strokeStyle = 'rgba(255,240,170,0.9)';
+  ctx.lineWidth = 1.4;
   for (let k = 0; k < 16; k++) {
-    const life = (ms / 900 + k * 0.0625 + seed * 0.13) % 1;
-    const px = ox + Math.round(Math.sin(k * 7.3 + seed) * 11);
-    const py = oy - Math.round(life * 54);
+    const a = -t * 0.5 + (k / 16) * Math.PI * 2;
+    const r0 = R * (k % 2 ? 0.87 : 0.88);
+    const r1 = R * (k % 2 ? 0.96 : 0.99);
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+    ctx.lineTo(Math.cos(a) * r1, Math.sin(a) * r1);
+    ctx.stroke();
+  }
+  // the hexagram and a small ring in the middle
+  ctx.strokeStyle = `rgba(255,232,130,${0.95 * pulse})`;
+  ctx.lineWidth = 1.2;
+  poly(6, R * 0.8, t * 0.6, 2);
+  poly(6, R * 0.8, t * 0.6 + Math.PI / 6, 2);
+  ctx.beginPath();
+  ctx.arc(0, 0, R * 0.34, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+  // sparkles rising out of the circle
+  ctx.save();
+  ctx.globalAlpha = fade * grow;
+  for (let k = 0; k < 14; k++) {
+    const life = (ms / 1100 + k * 0.0714 + seed * 0.13) % 1;
+    const a = k * 2.4 + seed;
+    const rr = R * 0.8 * (0.25 + 0.75 * ((k * 0.618) % 1));
+    const px = cx + Math.round(Math.cos(a) * rr);
+    const py = cy + Math.round(Math.sin(a) * rr * squash) - Math.round(life * 26);
     ctx.fillStyle = life < 0.5 ? '#ffffff' : '#ffe27a';
     ctx.fillRect(px, py, 1 + (k % 2), 2);
   }

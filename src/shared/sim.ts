@@ -99,6 +99,8 @@ function mkFighter(w: World, def: string, slot: number, x: number, y: number): F
     aura: 0,
     shield: 0,
     halo: 0,
+    haloX: 0,
+    haloY: 0,
     storm: 0,
     heat: 0,
     heatCd: 0,
@@ -201,6 +203,7 @@ export function step(w: World, inputs: Array<PlayerInput | undefined>) {
   applyThrown(w);
   updateItems(w);
   pickUpWalkOvers(w);
+  tickHalos(w);
   updateShots(w);
   w.fighters = w.fighters.filter((f) => !(!isPlayer(f) && f.st === St.Dead && f.t >= 40));
   updateStage(w);
@@ -519,13 +522,11 @@ function updateEnemy(w: World, e: Fighter) {
   if (e.st === St.Idle || e.st === St.Walk) {
     // 光環: a hurt enemy that is not busy sometimes heals itself with holy light, and stands still for a moment doing it
     if (e.hp > 0 && e.hp < e.maxHp * ENEMY_HALO.below && e.sp[SP.Halo] <= 0 && rand(w) < ENEMY_HALO.chance) {
-      e.hp = Math.min(e.maxHp, e.hp + Math.ceil(e.maxHp * ENEMY_HALO.heal));
-      e.halo = HALO.vis;
+      startHalo(w, e, ENEMY_HALO.dur);
       e.sp[SP.Halo] = ENEMY_HALO.cooldown;
-      e.aiT = Math.max(e.aiT, ENEMY_HALO.pause);
+      e.aiT = Math.max(e.aiT, ENEMY_HALO.dur);
       e.vx = 0;
       e.vy = 0;
-      w.ev.push([e.x, e.y, 14, 1]);
     }
     const tgt = nearestPlayer(w, e);
     if (!tgt) {
@@ -952,9 +953,7 @@ function triggerSpecial(w: World, f: Fighter, id: number) {
       f.volleyCd = 0;
       break;
     case SP.Halo:
-      f.hp = f.maxHp;
-      f.halo = HALO.vis;
-      w.ev.push([f.x, f.y, 14, 1]);
+      startHalo(w, f, HALO.dur);
       break;
     case SP.Aura:
       f.aura = AURA.dur;
@@ -970,6 +969,28 @@ function triggerSpecial(w: World, f: Fighter, id: number) {
       break;
   }
   f.sp[id] = SPECIALS[id].cooldown;
+}
+
+/** 光環: puts the golden circle on the ground right where `f` stands. */
+function startHalo(w: World, f: Fighter, dur: number) {
+  f.halo = dur;
+  f.haloX = f.x;
+  f.haloY = f.y;
+  w.ev.push([f.x, f.y, 14, 1]);
+}
+
+/** Every `gap` ticks each live circle heals everybody on its caster's side who stands inside it. */
+function tickHalos(w: World) {
+  for (const c of w.fighters) {
+    if (c.halo <= 0 || c.hp <= 0 || c.st === St.Dead || c.halo % HALO.gap !== 0) continue;
+    const team = isPlayer(c);
+    for (const t of w.fighters) {
+      if (t.hp <= 0 || t.st === St.Dead || isPlayer(t) !== team || t.hp >= t.maxHp) continue;
+      const nx = (t.x - c.haloX) / HALO.rx;
+      const ny = (t.y - c.haloY) / HALO.ry;
+      if (nx * nx + ny * ny <= 1) t.hp = Math.min(t.maxHp, t.hp + t.maxHp * HALO.rate);
+    }
+  }
 }
 
 /** Keeps the energy bar draining while a timed special runs, and empties it when they are over. */
@@ -1239,7 +1260,10 @@ function updateStage(w: World) {
  */
 function nextLap(w: World) {
   const shift = w.cam;
-  for (const f of w.fighters) f.x = Math.max(0, f.x - shift);
+  for (const f of w.fighters) {
+    f.x = Math.max(0, f.x - shift);
+    f.haloX -= shift;
+  }
   for (const it of w.items) it.x = Math.max(0, it.x - shift);
   for (const s of w.shots) s.x -= shift;
   w.ev.length = 0;
@@ -1295,7 +1319,7 @@ export function snapshot(w: World): Snapshot {
       r: f.face,
       s: f.st,
       t: f.t,
-      h: f.hp,
+      h: r1(f.hp),
       m: f.maxHp,
       em: f.mpMax,
       w: f.weapon,
@@ -1306,6 +1330,7 @@ export function snapshot(w: World): Snapshot {
       ht: f.heatCd > 0 ? 500 + Math.ceil(f.heatCd / 60) : f.heat,
       b: (f.storm > 0 ? 16 : 0) | (f.aura > 0 ? 1 : 0) | (f.shield > 0 ? 2 : 0) | (f.halo > 0 ? 4 : 0) | ((f.aura > 0 && f.aura < 120) || (f.shield > 0 && f.shield < 120) ? 8 : 0),
       k: f.kind === 'player' ? f.sp.slice() : [],
+      hl: f.halo > 0 ? [r1(f.haloX), r1(f.haloY), f.halo] : [],
     })),
     it: w.items.map((i) => ({ i: i.id, k: i.kind, x: r1(i.x), y: r1(i.y), z: r1(i.z) })),
     sh: w.shots.map((s) => ({ k: s.kind, x: r1(s.x), y: r1(s.y), z: r1(s.z), r: (s.vx >= 0 ? 1 : -1) as 1 | -1 })),

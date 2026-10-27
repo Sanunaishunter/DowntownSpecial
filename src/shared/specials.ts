@@ -38,10 +38,16 @@ export const MP_MAX = 100;
 
 export const BEAM = { charge: 24, fire: 360, recover: 14, pulse: 5, len: 190, dmg: 2, halfDepth: 14 };
 export const VOLLEY = { shots: 10, gap: 14, speed: 4.5, life: 50, dmg: 14 };
-/** 光環: full heal, the light column is only a visual. */
-export const HALO = { vis: 110 };
-/** Enemies cast 光環 on themselves now and then: hurt (below `below` of max health), standing around, off cooldown. */
-export const ENEMY_HALO = { below: 0.6, heal: 0.4, chance: 1 / 90, cooldown: 600, pause: 30 };
+/**
+ * 光環: a golden magic circle appears on the ground where it was cast and stays put for `dur` ticks. Everyone on the caster's
+ * side standing inside it (an ellipse `rx` wide, `ry` deep) gets `rate` of their max health every `gap` ticks: 10% a second.
+ */
+export const HALO = { dur: 600, rx: 30, ry: 12, rate: 0.01, gap: 6 };
+/**
+ * Enemies cast 光環 on themselves now and then: hurt (below `below` of max health), standing around, off cooldown.
+ * Their circle is shorter (4 seconds, so 40%) and the caster stays in it until it is over, or until it gets knocked out of it.
+ */
+export const ENEMY_HALO = { below: 0.6, dur: 240, chance: 1 / 90, cooldown: 600 };
 /** 爆氣: +200% damage for 20 seconds. */
 export const AURA = { dur: 1200, mult: 2 };
 /** 聖盾: +200% defence (damage taken / 3), no flinching, no walking, 10 seconds. */
