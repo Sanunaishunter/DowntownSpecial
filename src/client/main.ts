@@ -60,8 +60,9 @@ async function main() {
 
   let scale = 2;
   const layout = () => {
-    const fit = Math.max(0.1, Math.min(screen.clientWidth / SCREEN_W, screen.clientHeight / SCREEN_H));
-    canvas.style.width = `${SCREEN_W * fit}px`;
+    const vw = renderer.viewW;
+    const fit = Math.max(0.1, Math.min(screen.clientWidth / vw, screen.clientHeight / SCREEN_H));
+    canvas.style.width = `${vw * fit}px`;
     canvas.style.height = `${SCREEN_H * fit}px`;
     const s = Math.max(2, Math.min(6, Math.ceil(fit * (window.devicePixelRatio || 1))));
     if (s !== scale) {
@@ -70,6 +71,7 @@ async function main() {
     }
   };
   new ResizeObserver(layout).observe(screen);
+  renderer.onViewChange = layout;
   layout();
 
   let session: Session | null = null;
@@ -107,8 +109,18 @@ async function main() {
   };
 
   // Practice parameters for single-player: /?weapon=1..7 starts armed, /?stage=onsen starts at 溫泉關.
-  const practice = { weapon: Number(q.get('weapon')) || 0, stage: q.get('stage') === 'onsen' ? 1 : 0 };
-  $('btn-local').onclick = () => start(new LocalSession(input, practice));
+  const practice = { weapon: Number(q.get('weapon')) || 0, stage: q.get('stage') === 'onsen' ? 1 : 0, viewW: SCREEN_W };
+  // /?wide: the picture fills the window and the controls float over it; the battlefield is as wide as the window is
+  // (single-player only for now, as every player in a room has to see the same battlefield)
+  const wide = q.has('wide');
+  app.classList.toggle('wide', wide);
+  $('btn-local').onclick = () => {
+    if (wide) {
+      const aspect = window.innerWidth / Math.max(1, window.innerHeight);
+      practice.viewW = Math.max(SCREEN_W, Math.min(480, 2 * Math.round((SCREEN_H * aspect) / 2)));
+    }
+    start(new LocalSession(input, practice));
+  };
   $('btn-create').onclick = () => void connect('create');
   const join = () => {
     const code = codeInput.value.trim();

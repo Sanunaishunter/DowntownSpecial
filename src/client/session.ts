@@ -22,9 +22,9 @@ export class LocalSession implements Session {
 
   constructor(
     private input: Input,
-    practice: { weapon?: number; stage?: number } = {},
+    practice: { weapon?: number; stage?: number; viewW?: number } = {},
   ) {
-    this.world = createWorld((Math.random() * 2 ** 31) | 0);
+    this.world = createWorld((Math.random() * 2 ** 31) | 0, practice.viewW);
     addPlayer(this.world, 0);
     const me = this.world.fighters[0];
     const wd = practice.weapon ? WEAPONS[practice.weapon] : undefined;

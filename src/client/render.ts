@@ -24,6 +24,9 @@ interface Fx {
   v: number;
 }
 
+/** Width of the picture being drawn: 256, or wider in the wide view. Set at the start of every frame. */
+let VW = SCREEN_W;
+
 export interface DrawOpts {
   mySlot: number;
   hint: string;
@@ -56,9 +59,13 @@ export class Renderer {
     this.setScale(2);
   }
 
+  /** The picture width the canvas is sized for; main.ts re-fits the page when it changes. */
+  viewW = SCREEN_W;
+  onViewChange: (() => void) | null = null;
+
   setScale(s: number) {
     this.s = s;
-    this.canvas.width = SCREEN_W * s;
+    this.canvas.width = this.viewW * s;
     this.canvas.height = SCREEN_H * s;
   }
 
@@ -72,6 +79,13 @@ export class Renderer {
 
   draw(snap: Snapshot | null, o: DrawOpts) {
     const ctx = this.ctx;
+    const vw = snap?.vw ?? this.viewW;
+    if (vw !== this.viewW) {
+      this.viewW = vw;
+      this.setScale(this.s);
+      this.onViewChange?.();
+    }
+    VW = vw;
     ctx.setTransform(this.s, 0, 0, this.s, 0, 0);
     ctx.imageSmoothingEnabled = false;
     const cam = snap ? snap.c : 0;
@@ -81,10 +95,10 @@ export class Renderer {
     const shy = Math.round(Math.cos(o.now * 0.13) * 2.5 * shake);
     ctx.translate(shx, shy);
     if (snap?.sg === 1) {
-      if (!this.assets.drawOnsen(ctx)) drawOnsenFallback(ctx);
+      if (!this.assets.drawOnsen(ctx, VW)) drawOnsenFallback(ctx);
       drawOnsenSteam(ctx, o.now);
     } else {
-      if (!this.assets.drawBackdrop(ctx, cam, SCREEN_W)) drawBackground(ctx, cam);
+      if (!this.assets.drawBackdrop(ctx, cam, VW)) drawBackground(ctx, cam);
       tintForTime(ctx, cam);
     }
     if (!snap) return;
@@ -92,17 +106,17 @@ export class Renderer {
     // 天雷萬鈞: the whole picture darkens while the storm lasts and flashes white on every strike
     if (snap.f.some((f) => f.b & 16)) {
       ctx.fillStyle = 'rgba(24,16,64,0.3)';
-      ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+      ctx.fillRect(0, 0, VW, SCREEN_H);
     }
     for (const e of this.fx) {
       const age = o.now - e.t0;
       if (e.k === 4 && age < 90) {
         ctx.fillStyle = `rgba(255,255,255,${0.32 * (1 - age / 90)})`;
-        ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+        ctx.fillRect(0, 0, VW, SCREEN_H);
       }
       if (e.k === EV_CRIT && age < 110) {
         ctx.fillStyle = `rgba(255,236,190,${0.22 * (1 - age / 110)})`;
-        ctx.fillRect(-4, -4, SCREEN_W + 8, SCREEN_H + 8);
+        ctx.fillRect(-4, -4, VW + 8, SCREEN_H + 8);
       }
     }
 
@@ -146,14 +160,14 @@ export class Renderer {
     const fade = 1 - (o.now - this.lapT0) / LAP_FADE_MS;
     if (fade > 0) {
       ctx.fillStyle = `rgba(0,0,0,${Math.min(1, fade * 1.6)})`;
-      ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+      ctx.fillRect(0, 0, VW, SCREEN_H);
       ctx.globalAlpha = Math.min(1, fade * 2);
       if (snap.sg === 1) {
-        text(ctx, '溫泉關', SCREEN_W / 2, 88, '#ffe060', 'center', 20);
-        text(ctx, `第 ${snap.lp + 1} 周`, SCREEN_W / 2, 114, '#ffffff', 'center', 12);
+        text(ctx, '溫泉關', VW / 2, 88, '#ffe060', 'center', 20);
+        text(ctx, `第 ${snap.lp + 1} 周`, VW / 2, 114, '#ffffff', 'center', 12);
       } else {
-        text(ctx, '東海道', SCREEN_W / 2, 88, '#ffe060', 'center', 20);
-        text(ctx, `第 ${snap.lp + 1} 周`, SCREEN_W / 2, 114, '#ffffff', 'center', 12);
+        text(ctx, '東海道', VW / 2, 88, '#ffe060', 'center', 20);
+        text(ctx, `第 ${snap.lp + 1} 周`, VW / 2, 114, '#ffffff', 'center', 12);
       }
       ctx.globalAlpha = 1;
     }
@@ -175,7 +189,7 @@ export class Renderer {
       const tier = n < 10 ? 0 : n < 25 ? 1 : n < 50 ? 2 : 3;
       const size = (15 + tier * 3 + Math.min(6, n / 25)) * (1 + 0.5 * bump);
       const jit = tier >= 3 ? Math.round(Math.sin(now * 0.11)) : 0;
-      const cx = i === 0 ? 78 : SCREEN_W - 78;
+      const cx = i === 0 ? 78 : VW - 78;
       const y = SCREEN_H - 24;
       const fontOf = (px: number) => `900 ${px}px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif`;
       ctx.save();
@@ -489,7 +503,7 @@ function drawWhirl(ctx: CanvasRenderingContext2D, ox: number, oy: number, t: num
 function drawOnsenFallback(ctx: CanvasRenderingContext2D) {
   const R = (c: string, y: number, h: number) => {
     ctx.fillStyle = c;
-    ctx.fillRect(0, y, SCREEN_W, h);
+    ctx.fillRect(0, y, VW, h);
   };
   R('#c8643a', 0, 100);
   R('#4a3a5a', 100, 10);
@@ -503,7 +517,7 @@ function drawOnsenSteam(ctx: CanvasRenderingContext2D, now: number) {
   ctx.save();
   for (let k = 0; k < 11; k++) {
     const p = (now / 5200 + k * 0.0909) % 1;
-    const x = 18 + k * 21 + Math.sin(now / 1800 + k * 1.7) * 6;
+    const x = 18 + k * ((VW - 36) / 10) + Math.sin(now / 1800 + k * 1.7) * 6;
     const y = 222 - p * 70;
     // a soft puff: the middle is the whitest and it fades to nothing at the rim
     const r = 8 + p * 12;
@@ -596,7 +610,7 @@ function drawBubble(ctx: CanvasRenderingContext2D, x: number, y: number, s: stri
   ctx.font = 'bold 9px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
   const w = Math.ceil(ctx.measureText(s).width) + 10;
   const h = 15;
-  const bx = Math.max(2, Math.min(SCREEN_W - w - 2, Math.round(x - w / 2)));
+  const bx = Math.max(2, Math.min(VW - w - 2, Math.round(x - w / 2)));
   const by = Math.round(y - h);
   ctx.fillStyle = '#000';
   ctx.fillRect(bx - 1, by - 1, w + 2, h + 2);
@@ -621,14 +635,14 @@ function drawBanner(ctx: CanvasRenderingContext2D, code: number, ticks: number) 
   ctx.save();
   ctx.globalAlpha = Math.max(0, a);
   if (code === B.title) {
-    text(ctx, '溫泉關', SCREEN_W / 2, 52, '#ffe060', 'center', 22);
-    text(ctx, '一夫當關　萬夫莫敵', SCREEN_W / 2, 80, '#ffffff', 'center', 9);
+    text(ctx, '溫泉關', VW / 2, 52, '#ffe060', 'center', 22);
+    text(ctx, '一夫當關　萬夫莫敵', VW / 2, 80, '#ffffff', 'center', 9);
   } else if (code === B.cleared) {
-    text(ctx, '關口守住了', SCREEN_W / 2, 56, '#ffe060', 'center', 20);
-    text(ctx, '五十名精英，無人能過', SCREEN_W / 2, 82, '#ffffff', 'center', 9);
+    text(ctx, '關口守住了', VW / 2, 56, '#ffe060', 'center', 20);
+    text(ctx, '五十名精英，無人能過', VW / 2, 82, '#ffffff', 'center', 9);
   } else {
-    text(ctx, '叛徒出現！', SCREEN_W / 2, 54, '#d8a0ff', 'center', 18);
-    text(ctx, '小心背後', SCREEN_W / 2, 78, '#ffffff', 'center', 9);
+    text(ctx, '叛徒出現！', VW / 2, 54, '#d8a0ff', 'center', 18);
+    text(ctx, '小心背後', VW / 2, 78, '#ffffff', 'center', 9);
   }
   ctx.restore();
 }
@@ -1110,7 +1124,7 @@ const TIME_OF_DAY: [number, number[]][] = [
 ];
 
 function tintForTime(ctx: CanvasRenderingContext2D, cam: number) {
-  const t = Math.max(0, Math.min(1, cam / (STAGE_W - SCREEN_W)));
+  const t = Math.max(0, Math.min(1, cam / (STAGE_W - VW)));
   let i = 1;
   while (i < TIME_OF_DAY.length - 1 && t > TIME_OF_DAY[i][0]) i++;
   const [t0, c0] = TIME_OF_DAY[i - 1];
@@ -1121,7 +1135,7 @@ function tintForTime(ctx: CanvasRenderingContext2D, cam: number) {
   ctx.save();
   ctx.globalCompositeOperation = 'multiply';
   ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
-  ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+  ctx.fillRect(0, 0, VW, SCREEN_H);
   ctx.restore();
 }
 
@@ -1130,21 +1144,21 @@ function drawBackground(ctx: CanvasRenderingContext2D, cam: number) {
     ctx.fillStyle = c;
     ctx.fillRect(Math.round(x), y, w, h);
   };
-  R('#7ec4e8', 0, 0, SCREEN_W, 72);
+  R('#7ec4e8', 0, 0, VW, 72);
   for (let i = 0; i < 5; i++) {
     const cx = ((((i * 120 - cam * 0.25) % 360) + 360) % 360) - 60;
     R('#ffffff', cx, 14 + (i % 3) * 9, 36, 7);
     R('#ffffff', cx + 8, 10 + (i % 3) * 9, 22, 5);
   }
   const first = Math.floor(cam / BW);
-  const last = Math.floor((cam + SCREEN_W) / BW);
+  const last = Math.floor((cam + VW) / BW);
   for (let i = first; i <= last; i++) drawBuilding(ctx, i * BW - cam, Math.abs(i) % 4);
 
-  R('#d99a3a', 0, HORIZON, SCREEN_W, SCREEN_H - HORIZON);
-  R('#a8742a', 0, HORIZON, SCREEN_W, 3);
-  for (const y of [148, 168, 192, 218]) R('#cf8f33', 0, y, SCREEN_W, 1);
+  R('#d99a3a', 0, HORIZON, VW, SCREEN_H - HORIZON);
+  R('#a8742a', 0, HORIZON, VW, 3);
+  for (const y of [148, 168, 192, 218]) R('#cf8f33', 0, y, VW, 1);
   for (let i = 0; i < 26; i++) {
-    const x = ((((i * 53 - cam) % SCREEN_W) + SCREEN_W) % SCREEN_W) | 0;
+    const x = ((((i * 53 - cam) % VW) + VW) % VW) | 0;
     R('#c07d28', x, 132 + ((i * 37) % 88), 3, 1);
   }
 }
@@ -1225,7 +1239,7 @@ function drawHud(ctx: CanvasRenderingContext2D, snap: Snapshot, o: DrawOpts) {
     // the bars grow with the health and mana caps (70px per 100), up to a limit so two players still fit
     const hpW = f ? Math.min(HUD_BAR_MAX, Math.round(f.m * 0.7)) : 70;
     const mpW = f ? Math.min(HUD_BAR_MAX, Math.round(f.em * 0.7)) : 70;
-    const x = left ? 8 : SCREEN_W - 8 - Math.max(70, hpW, mpW);
+    const x = left ? 8 : VW - 8 - Math.max(70, hpW, mpW);
     const name = DEFS[f?.d ?? ''] ? DEFS[f!.d].name : `P${i + 1}`;
     text(ctx, name + (i === o.mySlot ? ' ◀' : ''), x, 3);
     bar(ctx, x, 14, hpW, f ? f.h : 0, f ? f.m : 1);
@@ -1253,26 +1267,26 @@ function drawHud(ctx: CanvasRenderingContext2D, snap: Snapshot, o: DrawOpts) {
   });
 
   if (snap.sg === 1 && snap.ph >= 1) {
-    text(ctx, `溫泉關　擊倒 ${Math.min(snap.kl, ONSEN.total)} / ${ONSEN.total}`, SCREEN_W / 2, 3, '#ffe060', 'center');
+    text(ctx, `溫泉關　擊倒 ${Math.min(snap.kl, ONSEN.total)} / ${ONSEN.total}`, VW / 2, 3, '#ffe060', 'center');
     const traitor = snap.f.find((f) => f.b & 64 && f.s !== St.Dead);
     if (traitor) {
-      text(ctx, '叛徒', SCREEN_W / 2 - 58, 12, '#d8a0ff', 'left', 7);
-      bar(ctx, SCREEN_W / 2 - 40, 14, 80, traitor.h, traitor.m);
+      text(ctx, '叛徒', VW / 2 - 58, 12, '#d8a0ff', 'left', 7);
+      bar(ctx, VW / 2 - 40, 14, 80, traitor.h, traitor.m);
     }
   }
 
   const boss = snap.f.find((f) => DEFS[f.d]?.kind === 'boss' && f.s !== St.Dead);
   if (boss) {
-    text(ctx, `${DEFS[boss.d].name} Lv.${snap.lp + 1}`, SCREEN_W / 2, 3, '#ff9090', 'center');
-    bar(ctx, SCREEN_W / 2 - 40, 14, 80, boss.h, boss.m);
+    text(ctx, `${DEFS[boss.d].name} Lv.${snap.lp + 1}`, VW / 2, 3, '#ff9090', 'center');
+    bar(ctx, VW / 2 - 40, 14, 80, boss.h, boss.m);
   }
-  if (snap.lp > 0) text(ctx, `第 ${snap.lp + 1} 周　怪 Lv.${snap.lp + 1}`, SCREEN_W / 2, 24, '#ffe060', 'center', 7);
+  if (snap.lp > 0) text(ctx, `第 ${snap.lp + 1} 周　怪 Lv.${snap.lp + 1}`, VW / 2, 24, '#ffe060', 'center', 7);
 
   if (snap.s === 0 && snap.lk === 0 && snap.wv < snap.wt && Math.floor(o.now / 400) % 2 === 0) {
-    text(ctx, 'GO ▶', SCREEN_W - 12, 96, '#fff', 'right', 14);
+    text(ctx, 'GO ▶', VW - 12, 96, '#fff', 'right', 14);
   }
   if (snap.s === 2) {
-    text(ctx, 'GAME OVER', SCREEN_W / 2, 92, '#ff6060', 'center', 20);
+    text(ctx, 'GAME OVER', VW / 2, 92, '#ff6060', 'center', 20);
   }
-  if (o.hint) text(ctx, o.hint, SCREEN_W / 2, SCREEN_H - 12, '#ffffff', 'center');
+  if (o.hint) text(ctx, o.hint, VW / 2, SCREEN_H - 12, '#ffffff', 'center');
 }

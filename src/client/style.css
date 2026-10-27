@@ -358,3 +358,49 @@ input {
     font-size: 18px;
   }
 }
+
+/* /?wide: the picture fills the window and the controls float over it, in any orientation */
+#app.wide #screen,
+#app.touch.wide #screen {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  aspect-ratio: auto;
+}
+#app.touch.wide #touch {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  flex: none;
+  height: auto;
+  min-height: 0;
+  pointer-events: none;
+}
+#app.touch.wide #dpad,
+#app.touch.wide #runs,
+#app.touch.wide #specials,
+#app.touch.wide #btns {
+  pointer-events: auto;
+  opacity: 0.7;
+}
+#app.touch.wide #dpad {
+  width: 120px;
+  height: 120px;
+}
+#app.touch.wide #btns {
+  gap: 6px;
+}
+#app.touch.wide #specials {
+  --sp: 38px;
+  grid-template-columns: repeat(6, var(--sp));
+  gap: 5px;
+}
+#app.touch.wide #specials button .cd {
+  font-size: 13px;
+}
+#app.touch.wide #btns button {
+  width: 54px;
+  height: 54px;
+  font-size: 18px;
+}

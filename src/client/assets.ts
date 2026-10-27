@@ -114,20 +114,30 @@ export class Assets {
     ctx.imageSmoothingEnabled = false;
     for (const { def, img } of this.layers) {
       const y = def.y ?? 0;
-      if (def.parallax >= 1) {
-        for (let x = -(Math.round(cam) % def.w); x < width; x += def.w) ctx.drawImage(img, x, y);
-      } else {
-        ctx.drawImage(img, -Math.round(cam * def.parallax), y);
-      }
+      // a layer shorter than what the (wide) screen shows at the end of the stage repeats itself
+      const x0 = def.parallax >= 1 ? -(Math.round(cam) % def.w) : -Math.round(cam * def.parallax);
+      for (let x = x0; x < width; x += def.w) ctx.drawImage(img, x, y);
     }
     return true;
   }
 
   /** The one-screen picture of 溫泉關; false when it is not there. */
-  drawOnsen(ctx: CanvasRenderingContext2D): boolean {
-    if (!this.onsen) return false;
+  drawOnsen(ctx: CanvasRenderingContext2D, width: number): boolean {
+    const img = this.onsen;
+    if (!img) return false;
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(this.onsen, 0, 0);
+    // the picture is 256 wide: on a wider screen it sits in the middle and is mirrored out to both sides
+    const left = Math.floor((width - img.width) / 2);
+    ctx.drawImage(img, left, 0);
+    if (left > 0) {
+      for (const [edge, dir] of [[left, -1], [left + img.width, 1]] as const) {
+        ctx.save();
+        ctx.translate(dir < 0 ? edge : edge + img.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, 0, 0);
+        ctx.restore();
+      }
+    }
     return true;
   }
 

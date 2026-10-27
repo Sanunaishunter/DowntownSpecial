@@ -1580,3 +1580,37 @@ describe('攻擊N, 傷害數字, 爆擊, and shouting the move', () => {
     }
   });
 });
+
+describe('wide view (/?wide)', () => {
+  it('a wider screen means a wider battlefield: enemies come from beyond its edge, the stage is longer, the general still waits at the end', () => {
+    const w = createWorld(11, 384);
+    addPlayer(w, 0);
+    expect(snapshot(w).vw).toBe(384);
+    w.stageT = 60;
+    run(w, 5);
+    // the first wave comes in from just beyond the right edge of the wide screen
+    const first = w.fighters.filter((f) => f.kind !== 'player');
+    expect(first.length).toBeGreaterThan(0);
+    expect(Math.min(...first.map((f) => f.x))).toBeGreaterThanOrEqual(384);
+    // the hero is held inside the wide screen
+    const p = player(w);
+    run(w, 600, { held: Btn.Right, pressed: 0 });
+    expect(p.x).toBeLessThanOrEqual(w.cam + 384 - 8);
+    expect(p.x).toBeGreaterThan(300);
+    // the last screen of the stage is as far as the wide screen can go
+    w.wave = STAGE.waves.length - 1;
+    w.locked = false;
+    w.camMax = 1024;
+    w.cam = 1023;
+    p.x = 1300;
+    run(w, 10);
+    expect(w.fighters.some((f) => f.def === 'shogun')).toBe(true);
+    expect(w.camMax).toBe(1024);
+  });
+
+  it('the plain 256 screen is unchanged', () => {
+    const w = createWorld(11);
+    expect(w.viewW).toBe(256);
+    expect(snapshot(w).vw).toBe(256);
+  });
+});

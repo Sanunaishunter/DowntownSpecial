@@ -123,8 +123,9 @@ function mkFighter(w: World, def: string, slot: number, x: number, y: number): F
   };
 }
 
-export function createWorld(seed = 1): World {
+export function createWorld(seed = 1, viewW = SCREEN_W): World {
   return {
+    viewW,
     tick: 0,
     stageT: 0,
     seed,
@@ -205,6 +206,10 @@ export function removePlayer(w: World, slot: number) {
   s.a = 0;
   s.fid = 0;
 }
+
+/** The stage is as much longer than the 256-wide one as the screen is wider, and the last wave still waits at its very end. */
+const stageW = (w: World) => STAGE_W + (w.viewW - SCREEN_W);
+const waveAt = (w: World, i: number) => (i === STAGE.waves.length - 1 ? stageW(w) - w.viewW : STAGE.waves[i].at);
 
 /** The ground the fighters may walk on depends on the stage. */
 const groundMin = (w: World) => (w.stage === STAGE_ONSEN ? ONSEN.groundMin : GROUND_MIN);
@@ -713,8 +718,8 @@ function updateBody(w: World, f: Fighter) {
     }
   }
   const landed = wasAir && f.z === 0;
-  if (isPlayer(f)) f.x = clamp(f.x, Math.max(8, w.cam + 8), Math.min(STAGE_W - 8, w.cam + SCREEN_W - 8));
-  else f.x = clamp(f.x, 0, STAGE_W);
+  if (isPlayer(f)) f.x = clamp(f.x, Math.max(8, w.cam + 8), Math.min(stageW(w) - 8, w.cam + w.viewW - 8));
+  else f.x = clamp(f.x, 0, stageW(w));
   if (!f.plunge) f.y = clamp(f.y, groundMin(w), groundMax(w));
 
   switch (f.st) {
@@ -1009,7 +1014,7 @@ function updateItems(w: World) {
         }
       }
     }
-    it.x = clamp(it.x, 0, STAGE_W);
+    it.x = clamp(it.x, 0, stageW(w));
     it.y = clamp(it.y, groundMin(w), groundMax(w));
   }
 }
@@ -1193,7 +1198,7 @@ function fireBullet(w: World, f: Fighter) {
 function updateShots(w: World) {
   for (const s of w.shots) {
     s.x += s.vx;
-    if (--s.life <= 0 || s.x < w.cam - 20 || s.x > w.cam + SCREEN_W + 20) {
+    if (--s.life <= 0 || s.x < w.cam - 20 || s.x > w.cam + w.viewW + 20) {
       s.life = 0;
       continue;
     }
@@ -1309,7 +1314,7 @@ function fireGatling(w: World, f: Fighter) {
 function tickStorm(w: World, f: Fighter) {
   f.storm--;
   if ((THUNDER.dur - f.storm) % THUNDER.gap !== 0) return;
-  const foes = w.fighters.filter((t) => !isPlayer(t) && t.st !== St.Dead && t.x > w.cam - 20 && t.x < w.cam + SCREEN_W + 20);
+  const foes = w.fighters.filter((t) => !isPlayer(t) && t.st !== St.Dead && t.x > w.cam - 20 && t.x < w.cam + w.viewW + 20);
   let sx: number;
   let sy: number;
   if (foes.length && rand(w) < THUNDER.aimed) {
@@ -1317,7 +1322,7 @@ function tickStorm(w: World, f: Fighter) {
     sx = t.x;
     sy = t.y;
   } else {
-    sx = w.cam + 8 + rand(w) * (SCREEN_W - 16);
+    sx = w.cam + 8 + rand(w) * (w.viewW - 16);
     sy = groundMin(w) + rand(w) * (groundMax(w) - groundMin(w));
   }
   w.ev.push([sx, sy, 0, 4]);
@@ -1347,7 +1352,7 @@ function spawnWave(w: World, wd: WaveDef) {
   const mul = lapMul(w);
   for (const e of list) {
     const dx = e.dx ?? 0;
-    const x = e.side > 0 ? w.cam + SCREEN_W + 14 + dx : w.cam - 14 - dx;
+    const x = e.side > 0 ? w.cam + w.viewW + 14 + dx : w.cam - 14 - dx;
     const f = mkFighter(w, e.def, -1, x, e.y);
     f.maxHp = Math.round(f.maxHp * mul);
     f.hp = f.maxHp;
@@ -1385,21 +1390,21 @@ function updateStage(w: World) {
   const alive = w.fighters.filter((f) => isPlayer(f) && f.st !== St.Dead);
   if (alive.length) {
     const avg = alive.reduce((n, f) => n + f.x, 0) / alive.length;
-    const target = clamp(avg - SCREEN_W / 2 + 20, 0, w.camMax);
+    const target = clamp(avg - w.viewW / 2 + 20, 0, w.camMax);
     if (target > w.cam) w.cam = Math.min(target, w.cam + 2);
   }
 
   if (w.status === 0) {
     if (w.stage === STAGE_ONSEN) updateOnsen(w);
     else {
-      if (!w.locked && w.wave < waves.length && w.stageT >= 60 && w.cam >= waves[w.wave].at - 0.5) {
+      if (!w.locked && w.wave < waves.length && w.stageT >= 60 && w.cam >= waveAt(w, w.wave) - 0.5) {
         spawnWave(w, waves[w.wave]);
         w.locked = true;
-        w.camMax = waves[w.wave].at;
+        w.camMax = waveAt(w, w.wave);
       } else if (w.locked && !w.fighters.some((f) => !isPlayer(f))) {
         w.locked = false;
         w.wave++;
-        w.camMax = w.wave < waves.length ? waves[w.wave].at : STAGE_W - SCREEN_W;
+        w.camMax = w.wave < waves.length ? waveAt(w, w.wave) : stageW(w) - w.viewW;
       }
       if (!w.locked && w.wave >= waves.length && ++w.lapT >= LAP_DELAY) enterOnsen(w);
     }
@@ -1470,7 +1475,8 @@ export function enterOnsen(w: World) {
   sweepFloor(w);
   resetHeroes(w, 1);
   // the one who talks and kicks stands closest to the envoy
-  for (const f of w.fighters) if (isPlayer(f)) f.x = 64 - f.slot * 26;
+  // the scene is staged on the middle of the picture, which is 256 wide whatever the screen
+  for (const f of w.fighters) if (isPlayer(f)) f.x = 64 - f.slot * 26 + (w.viewW - SCREEN_W) / 2;
 }
 
 /** The pass is held: the Tokaido starts again, one lap tougher. */
@@ -1513,7 +1519,7 @@ function runIntro(w: World) {
   const lead = leadHero(w);
   let envoy = w.fighters.find((f) => f.script);
   if (!envoy && t === 1 && lead) {
-    envoy = mkFighter(w, 'bushi', -1, SCREEN_W + 14, lead.y);
+    envoy = mkFighter(w, 'bushi', -1, w.viewW + 14, lead.y);
     envoy.script = 1;
     envoy.maxHp = envoy.hp = 99999;
     envoy.face = -1;
@@ -1586,7 +1592,7 @@ function spawnElite(w: World, traitor: boolean) {
     w.spawned++;
   }
   const y = groundMin(w) + 4 + rand(w) * (groundMax(w) - groundMin(w) - 8);
-  const x = traitor ? w.cam - 16 : w.cam + SCREEN_W + 14 + rand(w) * 24;
+  const x = traitor ? w.cam - 16 : w.cam + w.viewW + 14 + rand(w) * 24;
   const f = mkFighter(w, def, -1, x, y);
   f.maxHp = Math.round(f.maxHp * lapMul(w) * ONSEN.hp * (traitor ? ONSEN.traitorHp : 1));
   f.hp = f.maxHp;
@@ -1628,6 +1634,7 @@ export function snapshot(w: World): Snapshot {
     wv: w.wave,
     wt: STAGE.waves.length,
     lk: w.locked ? 1 : 0,
+    vw: w.viewW,
     lp: w.lap,
     sg: w.stage,
     ph: w.phase,

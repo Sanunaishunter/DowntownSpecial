@@ -145,6 +145,8 @@ export interface PlayerSlot {
 export type GameEvent = [x: number, y: number, z: number, kind: number, value?: number];
 
 export interface World {
+  /** how many pixels wide the screen is: 256, or wider for the wide view */
+  viewW: number;
   tick: number;
   stageT: number;
   seed: number;
@@ -248,6 +250,8 @@ export interface Snapshot {
   wv: number;
   wt: number;
   lk: 0 | 1;
+  /** screen width in pixels */
+  vw: number;
   /** laps finished */
   lp: number;
   /** stage, 溫泉關 phase, ticks in the phase, enemies defeated there, and the banner [code, ticks left] or [] */
