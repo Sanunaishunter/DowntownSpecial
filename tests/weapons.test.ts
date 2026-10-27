@@ -1,16 +1,18 @@
-import { CHARGE, COMBO, CRIT, CRY, CRY_TEXT, EV_CRIT, EV_DAMAGE, EV_ZAP } from '../src/shared/feel';
+import { CHARGE, COMBO, CRIT, CRY, CRY_TEXT, EV_CRIT, EV_DAMAGE, EV_RAIN, EV_ZAP } from '../src/shared/feel';
 import { describe, expect, it } from 'vitest';
 import { Btn } from '../src/shared/constants';
 import { addPlayer, createWorld, enterOnsen, hit, snapshot, step } from '../src/shared/sim';
 import { AURA, BARRAGE, BEAM, ENEMY_HALO, HALO, MP_MAX, SHIELD, SP, SPECIALS, TATSU, THUNDER, VOLLEY } from '../src/shared/specials';
 import { St, type Fighter, type GameEvent, type PlayerInput, type World } from '../src/shared/types';
-import { BOW, GATLING, ITEM_1UP, ITEM_TONIC, NAGINATA, RAIKIRI, STAFF, TWIN, WEAPONS, WID } from '../src/shared/weapons';
+import { BOW, GATLING, ITEM_1UP, ITEM_TONIC, NAGINATA, RAIKIRI, RAIN, STAFF, TWIN, WEAPONS, WID } from '../src/shared/weapons';
 import { DEFS } from '../src/shared/defs';
 import { STAGE } from '../src/shared/stage';
 import { ONSEN, STAGE_ONSEN, STAGE_TOKAIDO } from '../src/shared/onsen';
 
 // exact damage numbers in these tests: no critical hits unless a test asks for them
 CRIT.chance = 0;
+// and the bow never turns into 萬箭齊發 by chance
+RAIN.chance = 0;
 
 const none: PlayerInput = { held: 0, pressed: 0 };
 
@@ -1758,6 +1760,73 @@ describe('遠古長弓', () => {
     run(w, 60, { held: Btn.A, pressed: 0 });
     expect(far.hp).toBe(9999);
     expect(p.wn).toBeLessThan(500);
+  });
+});
+
+describe('奧義 萬箭齊發', () => {
+  function rain() {
+    RAIN.chance = 1;
+    const w = setup();
+    const p = give(w, WID.Bow);
+    const foes = [foe(w, 60, 0), foe(w, 100, 25), foe(w, -60, -10), foe(w, 120, -20)].map((e) => {
+      e.aiT = 99999;
+      e.hp = e.maxHp = 9999;
+      return e;
+    });
+    return { w, p, foes };
+  }
+
+  it('turns the arrows into 100 homing arrows in one second, and says so', () => {
+    const { w, p, foes } = rain();
+    try {
+      press(w, Btn.A);
+      let loosed = 0;
+      let announced = false;
+      for (let i = 0; i < 200 && !announced; i++) {
+        const before = p.rain;
+        step(w, [{ held: Btn.A, pressed: 0 }, undefined]);
+        announced = w.ev.some((e) => e[3] === EV_RAIN);
+        if (before === 0 && p.rain > 0) break;
+      }
+      expect(p.rain).toBe(RAIN.dur);
+      expect(p.bowRun).toBe(0);
+      expect(p.rainCd).toBeGreaterThan(0);
+      // right away the bow stays drawn and the hero cannot be hurt
+      let spawned = 0;
+      for (let i = 0; i < RAIN.dur; i++) {
+        const ids = new Set(w.shots.filter((s) => s.rain).map((s) => s.id));
+        step(w, [{ held: Btn.A, pressed: 0 }, undefined]);
+        loosed += w.shots.filter((s) => s.rain && !ids.has(s.id)).length;
+        expect(p.inv).toBeGreaterThan(0);
+      }
+      spawned = loosed;
+      expect(spawned).toBeGreaterThanOrEqual(RAIN.count - 2);
+      expect(p.rain).toBe(0);
+      run(w, 120);
+      // the arrows found their enemies, wherever they stood
+      for (const e of foes) expect(e.hp).toBeLessThan(9999);
+      expect(foes.reduce((s, e) => s + (9999 - e.hp), 0)).toBeGreaterThan(40 * RAIN.dmg);
+    } finally {
+      RAIN.chance = 0;
+    }
+  });
+
+  it('does not come again before its cooldown, and never when the bow is not kept shooting', () => {
+    const { w, p } = rain();
+    try {
+      press(w, Btn.A);
+      run(w, 120, { held: Btn.A, pressed: 0 });
+      expect(p.rainCd).toBeGreaterThan(RAIN.cooldown - 130);
+      expect(w.shots.filter((s) => s.rain).length).toBeGreaterThanOrEqual(0);
+      const started = p.rainCd;
+      run(w, 300, { held: Btn.A, pressed: 0 });
+      expect(p.rainCd).toBe(started - 300);
+      // letting go of A starts the count of arrows over
+      run(w, 20);
+      expect(p.bowRun).toBe(0);
+    } finally {
+      RAIN.chance = 0;
+    }
   });
 });
 

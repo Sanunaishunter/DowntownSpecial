@@ -53,6 +53,19 @@ canvas {
   font-size: 12px;
   padding: 4px 8px;
 }
+#mute {
+  position: absolute;
+  top: 22px;
+  right: 60px;
+  z-index: 11;
+  opacity: 0.6;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+#mute.off {
+  text-decoration: line-through;
+  opacity: 0.4;
+}
 #menu {
   position: fixed;
   inset: 0;

@@ -107,6 +107,13 @@ export const TWIN = { chain: 4, window: 20, dur: 600, gap: 8, dmg: 4, reach: 34,
  */
 export const BOW = { gap: 12, draw: 7, speed: 4.6, life: 90, dmg: 10, range: 140, turn: 0.13, kbx: 0.8, muzzleX: 18, muzzleZ: 20 };
 
+/**
+ * 奧義 萬箭齊發: while the bow keeps shooting, after `minRun` arrows in a row each new arrow has `chance` to turn into it. For
+ * `dur` ticks (1 s) `count` arrows burst out of the hero and each one hunts down an enemy of its own anywhere on the screen.
+ * The hero cannot be hurt meanwhile. The next one comes no sooner than `cooldown` ticks later.
+ */
+export const RAIN = { minRun: 4, chance: 0.2, cooldown: 900, dur: 60, count: 100, speed: 5.4, turn: 0.4, life: 80, dmg: 8, lift: 4 };
+
 /** 鬼火雙頭薙刀: sets what it hits alight (`burnDmg` every `burnGap` ticks for `burn` ticks) and heals the wielder `heal` of max health per hit. */
 export const NAGINATA = { burn: 180, burnGap: 30, burnDmg: 3, heal: 0.03 };
 

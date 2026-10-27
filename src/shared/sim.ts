@@ -3,9 +3,9 @@ import { DEFS, PLAYER_DEFS } from './defs';
 import { AURA, BARRAGE, BEAM, ENEMY_HALO, HALO, MP_MAX, SHIELD, SP, SPECIALS, TATSU, THUNDER, VOLLEY } from './specials';
 import { STAGE, type WaveDef } from './stage';
 import { St, type Fighter, type PlayerInput, type Shot, type Snapshot, type World } from './types';
-import { CHARGE, COMBO, CRIT, CRY, EV_AWAKEN, EV_CRIT, EV_DAMAGE, EV_ZAP } from './feel';
+import { CHARGE, COMBO, CRIT, CRY, EV_AWAKEN, EV_CRIT, EV_DAMAGE, EV_RAIN, EV_ZAP } from './feel';
 import { ONSEN, STAGE_ONSEN, STAGE_TOKAIDO } from './onsen';
-import { BLADES, BOW, BULLET, NAGINATA, RAIKIRI, STAFF, GATLING, ITEM_1UP, ITEM_TONIC, SHURIKEN, TWIN, UNLIMITED, WEAPONS, WID, type AtkDef } from './weapons';
+import { BLADES, BOW, BULLET, NAGINATA, RAIKIRI, RAIN, STAFF, GATLING, ITEM_1UP, ITEM_TONIC, SHURIKEN, TWIN, UNLIMITED, WEAPONS, WID, type AtkDef } from './weapons';
 
 const PEND_WINDOW = 3;
 const UPPER_WINDOW = 12;
@@ -105,6 +105,9 @@ function mkFighter(w: World, def: string, slot: number, x: number, y: number): F
     burnSlot: -1,
     zap: 0,
     staffCd: 0,
+    bowRun: 0,
+    rain: 0,
+    rainCd: 0,
     cry: 0,
     cryT: 0,
     plunge: 0,
@@ -272,6 +275,9 @@ function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
   if (f.tapT > 0) f.tapT--;
   if (f.slashT > 0) f.slashT--;
   if (f.staffCd > 0) f.staffCd--;
+  if (f.rainCd > 0) f.rainCd--;
+  if (f.st !== St.Shoot || f.weapon !== WID.Bow) f.bowRun = 0;
+  if (f.rain > 0) tickRain(w, f);
   if (f.chainT > 0 && --f.chainT === 0) f.chain = 0;
   if (f.gold > 0 && --f.gold === 0) endGold(f);
   if (f.cryT > 0) f.cryT--;
@@ -825,7 +831,11 @@ function updateBody(w: World, f: Fighter) {
         break;
       }
       if (isPlayer(f) && f.weapon === WID.Bow) {
-        // the string is drawn, then the arrow goes
+        // the string is drawn, then the arrow goes; in the rain the bow stays drawn
+        if (f.rain > 0) {
+          f.t = BOW.draw + 1;
+          break;
+        }
         if (f.t === BOW.draw) fireArrow(w, f);
         if (f.t >= BOW.gap) setSt(f, St.Idle);
         break;
@@ -1338,9 +1348,44 @@ function fireArrow(w: World, f: Fighter) {
   if (f.wn <= 0) return;
   w.shots.push({ id: w.nextId++, kind: 4, x: f.x + f.face * BOW.muzzleX, y: f.y, z: f.z + BOW.muzzleZ, vx: f.face * BOW.speed, vy: 0, owner: f.slot + 1, life: BOW.life });
   f.wn--;
+  f.bowRun++;
   if (f.wn <= 0) {
     breakWeapon(w, f);
     setSt(f, St.Idle);
+  } else if (rainRoll(w, f)) startRain(w, f);
+}
+
+/** Decided from the tick and the hero, so a replay turns out the same. */
+function rainRoll(w: World, f: Fighter) {
+  if (f.bowRun < RAIN.minRun || f.rainCd > 0 || f.rain > 0) return false;
+  return hash01(w.tick, f.slot, 77) < RAIN.chance;
+}
+
+function hash01(a: number, b: number, c: number) {
+  let h = Math.imul((a * 31 + b * 131 + c * 7919) | 0, 2654435761) >>> 0;
+  h = Math.imul(h ^ (h >>> 15), 2246822519) >>> 0;
+  return ((h ^ (h >>> 13)) >>> 0) / 4294967296;
+}
+
+function startRain(w: World, f: Fighter) {
+  f.rain = RAIN.dur;
+  f.rainCd = RAIN.cooldown;
+  f.bowRun = 0;
+  w.ev.push([f.x, f.y, 20, EV_RAIN]);
+}
+
+/** Arrows burst out of the hero in every direction and then turn towards their enemies. */
+function tickRain(w: World, f: Fighter) {
+  const k = RAIN.dur - f.rain;
+  f.rain--;
+  f.inv = Math.max(f.inv, 2);
+  const n = Math.floor(((k + 1) * RAIN.count) / RAIN.dur) - Math.floor((k * RAIN.count) / RAIN.dur);
+  for (let i = 0; i < n; i++) {
+    const a = hash01(w.tick, f.slot * 211 + i, 5) * Math.PI * 2;
+    w.shots.push({
+      id: w.nextId++, kind: 4, x: f.x, y: f.y, z: f.z + 30 + hash01(w.tick, i, 9) * 14,
+      vx: Math.cos(a) * RAIN.speed, vy: Math.sin(a) * RAIN.speed, owner: f.slot + 1, life: RAIN.life, rain: true,
+    });
   }
 }
 
@@ -1348,24 +1393,34 @@ function fireArrow(w: World, f: Fighter) {
 function steerArrow(w: World, s: Shot) {
   let best: Fighter | undefined;
   let bd = BOW.range * BOW.range;
+  const prey: Fighter[] = [];
   for (const t of w.fighters) {
     if (isPlayer(t) || t.hp <= 0 || t.heldBy || t.st === St.Dead || t.st === St.Down || t.st === St.GetUp) continue;
+    if (s.rain) {
+      if (t.x >= w.cam - 8 && t.x <= w.cam + w.viewW + 8) prey.push(t);
+      continue;
+    }
     const d2 = (t.x - s.x) ** 2 + (t.y - s.y) ** 2;
     if (d2 < bd) {
       bd = d2;
       best = t;
     }
   }
+  // each arrow of the rain has an enemy of its own, so they do not all pile onto the nearest one
+  if (s.rain && prey.length) best = prey[s.id % prey.length];
   if (!best) return;
+  const turn = s.rain ? RAIN.turn : BOW.turn;
+  const speed = s.rain ? RAIN.speed : BOW.speed;
+  const lift = s.rain ? RAIN.lift : 1.5;
   const want = Math.atan2(best.y - s.y, best.x - s.x);
   const now = Math.atan2(s.vy ?? 0, s.vx);
   let diff = want - now;
   while (diff > Math.PI) diff -= Math.PI * 2;
   while (diff < -Math.PI) diff += Math.PI * 2;
-  const a = now + clamp(diff, -BOW.turn, BOW.turn);
-  s.vx = Math.cos(a) * BOW.speed;
-  s.vy = Math.sin(a) * BOW.speed;
-  s.z += clamp(best.z + 14 - s.z, -1.5, 1.5);
+  const a = now + clamp(diff, -turn, turn);
+  s.vx = Math.cos(a) * speed;
+  s.vy = Math.sin(a) * speed;
+  s.z += clamp(best.z + 14 - s.z, -lift, lift);
 }
 
 function fireBullet(w: World, f: Fighter) {
@@ -1406,7 +1461,7 @@ function updateShots(w: World) {
       const mul = slotMul(w, s.owner - 1);
       if (s.kind === 1) hit(w, t, s.owner - 1, Math.round(VOLLEY.dmg * mul), 2.2, true, 2.4, dir);
       else if (s.kind === 3) hit(w, t, s.owner - 1, Math.round(GATLING.dmg * mul), GATLING.kbx, false, 0, dir, true);
-      else if (s.kind === 4) hit(w, t, s.owner - 1, Math.round(BOW.dmg * mul), BOW.kbx, false, 0, dir, true);
+      else if (s.kind === 4) hit(w, t, s.owner - 1, Math.round((s.rain ? RAIN.dmg : BOW.dmg) * mul), BOW.kbx, false, 0, dir, true);
       else hit(w, t, s.owner - 1, Math.round(BULLET.dmg * mul), BULLET.kbx, false, 0, dir);
       s.life = 0;
       break;

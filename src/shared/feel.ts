@@ -35,5 +35,7 @@ export const EV_CRIT = 7;
 export const CHARGE = { start: 180, full: 600, goldDur: 1800 };
 /** Event kind for the flash of the awakening. */
 export const EV_AWAKEN = 8;
+/** Event kind for 奧義 萬箭齊發: the whole picture shakes and the name of the move is written across the middle. */
+export const EV_RAIN = 10;
 /** Event kind for a small lightning that jumps to an enemy (雷切). */
 export const EV_ZAP = 9;

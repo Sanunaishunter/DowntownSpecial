@@ -7,5 +7,8 @@ assets/*
 !assets/manifest.json
 !assets/gen/
 !assets/gen/*.png
+!assets/music/
+!assets/music/*.mp3
+!assets/music/*.ogg
 __pycache__/
 *.pyc

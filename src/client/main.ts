@@ -4,6 +4,7 @@ import { TICK_RATE } from '../shared/constants';
 import { SPECIALS } from '../shared/specials';
 import { Assets } from './assets';
 import { Input, setupTouch } from './input';
+import { Music } from './music';
 import { Renderer } from './render';
 import { SKILL_ICONS } from './skillicons';
 import { LocalSession, NetSession, type Session } from './session';
@@ -53,6 +54,15 @@ async function main() {
     touchApi.bind(b, sp.bit);
     return { el: b, cd: b.querySelector('.cd') as HTMLElement, last: -1 };
   });
+
+  const music = new Music();
+  const muteBtn = $('mute');
+  const showMute = () => muteBtn.classList.toggle('off', music.muted);
+  muteBtn.onclick = () => {
+    music.setMuted(!music.muted);
+    showMute();
+  };
+  showMute();
 
   const assets = new Assets();
   void assets.load();
@@ -175,6 +185,10 @@ async function main() {
         hint = '把網址傳給朋友，等他加入…';
       }
     }
+    // the tune follows the scene: the shogun's fight, 溫泉關, the road, and the menu while nobody is playing
+    if (!snap) music.play(['menu', 'tokaido']);
+    else if (snap.f.some((f) => f.d === 'shogun' && f.h > 0)) music.play(['shogun', 'tokaido']);
+    else music.play(snap.sg === 1 ? ['onsen', 'tokaido'] : ['tokaido']);
     renderer.draw(snap, { mySlot: session?.mySlot() ?? 0, hint, now });
     requestAnimationFrame(frame);
   };

@@ -1,6 +1,6 @@
 import { SCREEN_H, SCREEN_W, STAGE_W } from '../shared/constants';
 import { ONSEN } from '../shared/onsen';
-import { CRY_TEXT, EV_AWAKEN, EV_CRIT, EV_DAMAGE, EV_ZAP } from '../shared/feel';
+import { CRY_TEXT, EV_AWAKEN, EV_CRIT, EV_DAMAGE, EV_RAIN, EV_ZAP } from '../shared/feel';
 import { DEFS } from '../shared/defs';
 import { BEAM, HALO, MP_MAX, SPECIALS } from '../shared/specials';
 import { St, type GameEvent, type SnapFighter, type SnapItem, type Snapshot } from '../shared/types';
@@ -44,6 +44,7 @@ export class Renderer {
   private lap = 0;
   private stg = 0;
   private shakeT0 = -1e9;
+  private rainT0 = -1e9;
   private combo = [
     { n: 0, t0: -1e9 },
     { n: 0, t0: -1e9 },
@@ -72,6 +73,11 @@ export class Renderer {
 
   addFx(events: GameEvent[], now: number) {
     for (const e of events) {
+      // the rain is kept apart, so the hundred damage numbers it makes cannot push it out of the list
+      if (e[3] === EV_RAIN) {
+        this.rainT0 = now;
+        continue;
+      }
       this.fx.push({ x: e[0], y: e[1], z: e[2], k: e[3], t0: now, v: e[4] ?? 0 });
       if (e[3] === EV_CRIT || e[3] === EV_AWAKEN) this.shakeT0 = now;
     }
@@ -92,7 +98,9 @@ export class Renderer {
     const cam = snap ? snap.c : 0;
     // a critical hit shakes the whole picture for a moment
     const charging = snap?.f.some((f) => f.b & 1024 && f.ch > 150) ?? false;
-    const shake = Math.max(charging ? 0.3 : 0, 1 - (o.now - this.shakeT0) / 170);
+    // 萬箭齊發 rattles it for the whole second the arrows are loosed
+    const rainAge = o.now - this.rainT0;
+    const shake = Math.max(charging ? 0.3 : 0, 1 - (o.now - this.shakeT0) / 170, rainAge < 1100 ? 1.6 * (1 - rainAge / 1500) : 0);
     const shx = Math.round(Math.sin(o.now * 0.09) * 3 * shake);
     const shy = Math.round(Math.cos(o.now * 0.13) * 2.5 * shake);
     ctx.translate(shx, shy);
@@ -123,6 +131,16 @@ export class Renderer {
       if (e.k === EV_CRIT && age < 110) {
         ctx.fillStyle = `rgba(255,236,190,${0.22 * (1 - age / 110)})`;
         ctx.fillRect(-4, -4, VW + 8, SCREEN_H + 8);
+      }
+    }
+
+    if (rainAge >= 0 && rainAge < 1900) {
+      // the picture dims to a deep blue, with a white flash as the move begins
+      ctx.fillStyle = `rgba(8,14,48,${0.5 * Math.min(1, rainAge / 120, (1900 - rainAge) / 500)})`;
+      ctx.fillRect(-6, -6, VW + 12, SCREEN_H + 12);
+      if (rainAge < 140) {
+        ctx.fillStyle = `rgba(255,255,255,${0.7 * (1 - rainAge / 140)})`;
+        ctx.fillRect(-6, -6, VW + 12, SCREEN_H + 12);
       }
     }
 
@@ -157,6 +175,7 @@ export class Renderer {
     ctx.translate(-shx, -shy);
     drawHud(ctx, snap, o);
     this.drawCombo(snap, o.now);
+    if (rainAge >= 0 && rainAge < 1900) drawRainTitle(ctx, rainAge);
     if (snap.bn.length) drawBanner(ctx, snap.bn[0], snap.bn[1]);
 
     // a new lap or stage: cut to black on the stage start, then fade the title and the picture back in
@@ -732,6 +751,49 @@ function drawBanner(ctx: CanvasRenderingContext2D, code: number, ticks: number) 
   } else {
     text(ctx, '叛徒出現！', VW / 2, 54, '#d8a0ff', 'center', 18);
     text(ctx, '小心背後', VW / 2, 78, '#ffffff', 'center', 9);
+  }
+  ctx.restore();
+}
+
+// 奧義 萬箭齊發: black bars slide in, and the name of the move is written large across the middle of the picture.
+function drawRainTitle(ctx: CanvasRenderingContext2D, age: number) {
+  const out = Math.min(1, (1900 - age) / 400);
+  const bar = Math.round(26 * Math.min(1, age / 160) * out);
+  ctx.save();
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, VW, bar);
+  ctx.fillRect(0, SCREEN_H - bar, VW, bar);
+  // streaks rush outwards from the middle
+  ctx.globalAlpha = 0.5 * out;
+  ctx.fillStyle = '#bfe4ff';
+  for (let i = 0; i < 28; i++) {
+    const a = i * 2.399 + 0.4;
+    const r0 = 30 + ((age / 6 + i * 23) % 120);
+    const len = 14 + (i % 5) * 6;
+    const cx = VW / 2;
+    const cy = SCREEN_H / 2;
+    for (let s = 0; s < len; s += 2) ctx.fillRect(Math.round(cx + Math.cos(a) * (r0 + s) * 1.4), Math.round(cy + Math.sin(a) * (r0 + s) * 0.9), 1, 1);
+  }
+  // the title pops in a little oversized and settles
+  const pop = 1 + 0.5 * Math.max(0, 1 - age / 200);
+  ctx.globalAlpha = Math.min(1, age / 80) * out;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const [s, size, y, col] of [['奧義', 22, SCREEN_H / 2 - 30, '#ffe060'], ['萬箭齊發', 40, SCREEN_H / 2 + 10, '#ffffff']] as const) {
+    ctx.save();
+    ctx.translate(VW / 2, y);
+    ctx.scale(pop, pop);
+    ctx.font = `900 ${size}px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif`;
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = '#b01818';
+    ctx.strokeText(s, 0, 0);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#000';
+    ctx.strokeText(s, 0, 0);
+    ctx.fillStyle = col;
+    ctx.fillText(s, 0, 0);
+    ctx.restore();
   }
   ctx.restore();
 }

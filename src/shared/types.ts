@@ -87,6 +87,10 @@ export interface Fighter {
   zap: number;
   /** 鬼火旋舞: ticks before the naginata may start its spin again */
   staffCd: number;
+  /** 萬箭齊發: arrows loosed in a row, ticks of the arrow rain left, and ticks before the next one may start */
+  bowRun: number;
+  rain: number;
+  rainCd: number;
   /** the move name being shouted (see CRY) and its ticks left */
   cry: number;
   cryT: number;
@@ -145,6 +149,8 @@ export interface Shot {
   vx: number;
   /** sideways speed, only for the homing arrows */
   vy?: number;
+  /** an arrow of the 萬箭齊發 rain: picks its own enemy and turns hard */
+  rain?: boolean;
   owner: number;
   life: number;
 }
