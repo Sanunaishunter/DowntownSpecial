@@ -490,6 +490,48 @@
           60
         ]
       },
+      "idle_w7": {
+        "frames": [
+          90
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w7": {
+        "frames": [
+          84,
+          85,
+          86,
+          85
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w7": {
+        "frames": [
+          87,
+          88
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w7": {
+        "frames": [
+          89
+        ],
+        "ticks": [
+          60
+        ]
+      },
       "swing_w2": {
         "frames": [
           37,
@@ -536,6 +578,26 @@
           4,
           3,
           9
+        ]
+      },
+      "swing_w7": {
+        "frames": [
+          91,
+          92,
+          93
+        ],
+        "ticks": [
+          3,
+          4,
+          7
+        ]
+      },
+      "whirl": {
+        "frames": [
+          94
+        ],
+        "ticks": [
+          60
         ]
       },
       "shoot_w5": {
@@ -1047,6 +1109,48 @@
           60
         ]
       },
+      "idle_w7": {
+        "frames": [
+          90
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w7": {
+        "frames": [
+          84,
+          85,
+          86,
+          85
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w7": {
+        "frames": [
+          87,
+          88
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w7": {
+        "frames": [
+          89
+        ],
+        "ticks": [
+          60
+        ]
+      },
       "swing_w2": {
         "frames": [
           37,
@@ -1093,6 +1197,26 @@
           4,
           3,
           9
+        ]
+      },
+      "swing_w7": {
+        "frames": [
+          91,
+          92,
+          93
+        ],
+        "ticks": [
+          3,
+          4,
+          7
+        ]
+      },
+      "whirl": {
+        "frames": [
+          94
+        ],
+        "ticks": [
+          60
         ]
       },
       "shoot_w5": {
@@ -1604,6 +1728,48 @@
           60
         ]
       },
+      "idle_w7": {
+        "frames": [
+          90
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk_w7": {
+        "frames": [
+          84,
+          85,
+          86,
+          85
+        ],
+        "ticks": [
+          8,
+          8,
+          8,
+          8
+        ],
+        "loop": true
+      },
+      "run_w7": {
+        "frames": [
+          87,
+          88
+        ],
+        "ticks": [
+          4,
+          4
+        ],
+        "loop": true
+      },
+      "jump_w7": {
+        "frames": [
+          89
+        ],
+        "ticks": [
+          60
+        ]
+      },
       "swing_w2": {
         "frames": [
           37,
@@ -1650,6 +1816,26 @@
           4,
           3,
           9
+        ]
+      },
+      "swing_w7": {
+        "frames": [
+          91,
+          92,
+          93
+        ],
+        "ticks": [
+          3,
+          4,
+          7
+        ]
+      },
+      "whirl": {
+        "frames": [
+          94
+        ],
+        "ticks": [
+          60
         ]
       },
       "shoot_w5": {

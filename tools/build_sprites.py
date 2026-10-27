@@ -53,6 +53,10 @@ SHEETS = [
          scale_from="sheet-weapon.png", main_only=True),
     dict(file="sheet-special.jpg", grid=(3, 2), names=["charge1", "charge2", "fire1", "fire2", "recover", "cast"],
          ref="recover", main_only=True, gain=1.12),
+    dict(file="sheet-twin.jpg", grid=(3, 2), names=["tready", "twind", "tslash1", "tslash2", "twhirl1", "twhirl2"],
+         ref="tready", main_only=True, split="components", grow=0, skip=["twhirl1", "twhirl2"]),
+    # the sixth pose's blades touch the fifth cell, so it is cut out of the sheet by hand
+    dict(file="sheet-twin-whirl.jpg", grid=(1, 1), names=["twhirl2"], scale_from="sheet-twin.jpg", main_only=True),
     dict(file="sheet-blades.jpg", grid=(3, 2), names=["bready", "bwind", "bstrike", "sready", "sstrike", "swind"],
          scale_from="sheet-special.jpg", main_only=True, split="components", grow=0, auto_gain=True),
     dict(file="sheet-heavy.jpg", grid=(3, 2), names=["stcarry", "stwind", "stsmash", "rready", "rfire", "rbash"],
@@ -93,6 +97,10 @@ PALETTE = [
     ("metal_light", (100, 100, 112)),
     ("gunwood", (136, 82, 42)),
     ("gunwood_dark", (88, 52, 28)),
+    ("steel", (176, 188, 204)),
+    ("steel_dark", (108, 120, 140)),
+    ("gold", (226, 178, 52)),
+    ("grip", (112, 26, 30)),
     ("nj_body", (34, 41, 63)),
     ("nj_body_dark", (15, 21, 34)),
     ("nj_body_hi", (56, 62, 84)),
@@ -124,6 +132,9 @@ ENTRY_SCOPE = {
     "gunwood": ["rready", "rfire", "rbash"],
     "gunwood_dark": ["rready", "rfire", "rbash"],
 }
+TWIN_POSES = ["tready", "twind", "tslash1", "tslash2", "twhirl2"]
+for _n in ("steel", "steel_dark", "gold", "grip"):
+    ENTRY_SCOPE[_n] = TWIN_POSES
 NINJA_POSES = ["n_idle", "n_walk1", "n_walk2", "n_wind", "n_punch", "n_kick", "n_hurt", "n_fly", "n_lying", "n_getup", "n_rush", "n_kick2"]
 for _n in ("nj_body", "nj_body_dark", "nj_body_hi", "nj_red", "nj_red_dark", "nj_metal", "nj_metal_dark"):
     ENTRY_SCOPE[_n] = NINJA_POSES
@@ -160,9 +171,10 @@ BASE_FRAMES = [
 # Armed stances per weapon suffix: the upper body of the "ready" frame is grafted onto
 # the legs of each locomotion frame. _w = stick, _w2 = bamboo sword, _w4 = energy sword.
 ARMED_BASES = ["walk1", "walk2", "walk3", "run1", "run2", "jump"]
-ARMED_SETS = {"_w": "idle_w", "_w2": "bready", "_w3": "stcarry", "_w4": "sready", "_w5": "rready"}
+ARMED_SETS = {"_w": "idle_w", "_w2": "bready", "_w3": "stcarry", "_w4": "sready", "_w5": "rready", "_w7": "tready"}
 ARMED = [f"{b}{suf}" for suf in ARMED_SETS for b in ARMED_BASES]
-FRAME_ORDER = BASE_FRAMES + ARMED
+# the twin swords' own poses come last so that every earlier frame keeps its number
+FRAME_ORDER = BASE_FRAMES + ARMED + TWIN_POSES
 
 # anim name -> frames (by pose name) and per-frame duration in game ticks
 ANIMS = {
@@ -195,7 +207,7 @@ ANIMS = {
     "shoot": (["windup", "punch", "windup"], [2, 6, 2]),
 }
 LOOPING = {"walk", "run", "hold"}
-for _suf, _idle in (("_w", "idle_w"), ("_w2", "bready"), ("_w3", "stcarry"), ("_w4", "sready"), ("_w5", "rready")):
+for _suf, _idle in (("_w", "idle_w"), ("_w2", "bready"), ("_w3", "stcarry"), ("_w4", "sready"), ("_w5", "rready"), ("_w7", "tready")):
     ANIMS[f"idle{_suf}"] = ([_idle], [60])
     ANIMS[f"walk{_suf}"] = ([f"walk1{_suf}", f"walk2{_suf}", f"walk3{_suf}", f"walk2{_suf}"], [8, 8, 8, 8])
     ANIMS[f"run{_suf}"] = ([f"run1{_suf}", f"run2{_suf}"], [4, 4])
@@ -206,6 +218,8 @@ ANIMS["swing_w2"] = (["bwind", "bstrike", "bstrike"], [4, 4, 10])
 ANIMS["swing_w4"] = (["swind", "sstrike", "sstrike"], [3, 5, 8])
 ANIMS["swing_w3"] = (["stwind", "stsmash", "stsmash"], [8, 4, 16])
 ANIMS["swing_w5"] = (["rbash", "rbash", "rready"], [4, 3, 9])
+ANIMS["swing_w7"] = (["twind", "tslash1", "tslash2"], [3, 4, 7])
+ANIMS["whirl"] = (["twhirl2"], [60])
 ANIMS["shoot_w5"] = (["rready", "rfire", "rready"], [2, 6, 2])
 LOOP_FROM = {"beam": 2}  # after the last frame, repeat from this frame index
 

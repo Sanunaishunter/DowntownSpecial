@@ -239,7 +239,9 @@ export class Renderer {
     const whirl = f.s === St.Whirl;
     if (tatsu) drawTornado(ctx, ox, oy - Math.round(f.z), f.t, true);
     const blades: [number, number] = f.w2 ? [f.w, f.w2] : [f.w, f.w];
-    if (whirl) drawWhirl(ctx, ox, oy - Math.round(f.z), f.t, false, blades);
+    // the twin swords have their own whirling picture; without it the arms and blades are drawn here
+    const whirlGfx = whirl && !(f.w === WID.Twin && !f.w2 && this.assets.hasArmed(f.d, f.w));
+    if (whirlGfx) drawWhirl(ctx, ox, oy - Math.round(f.z), f.t, false, blades);
     ctx.save();
     ctx.translate(ox, oy - Math.round(f.z));
     // 龍捲風腳 / 炫風斬: the body spins around its own axis, which on a flat sprite is a quick flip
@@ -248,7 +250,7 @@ export class Renderer {
     this.paint(ctx, f);
     ctx.restore();
     if (tatsu) drawTornado(ctx, ox, oy - Math.round(f.z), f.t, false);
-    if (whirl) drawWhirl(ctx, ox, oy - Math.round(f.z), f.t, true, blades);
+    if (whirlGfx) drawWhirl(ctx, ox, oy - Math.round(f.z), f.t, true, blades);
     if (f.s === St.Barrage) drawBarrage(ctx, ox, oy - Math.round(f.z), f.r, f.t);
     if (f.w === WID.Gatling && f.ht > GATLING.overheat) drawSteam(ctx, ox + f.r * 38, oy - Math.round(f.z) - 21, now);
     if (f.b & 2) drawShield(ctx, ox + f.r * 15, oy - Math.round(f.z), shieldMs, now, !!(f.b & 8));
@@ -662,7 +664,7 @@ function artFor(f: SnapFighter, hasArt: boolean): { weapon: number; anim?: strin
   if (f.s === St.Beam) return { weapon: 0, anim: f.t >= BEAM.charge + BEAM.fire ? 'beamend' : 'beam', t: f.t };
   if (f.s === St.Barrage) return { weapon: 0, anim: 'punch', t: f.t % 12 };
   if (f.s === St.Tatsu) return { weapon: 0, anim: 'kick', t: 7 };
-  if (f.s === St.Whirl) return { weapon: 0, anim: 'idle', t: 0 };
+  if (f.s === St.Whirl) return hasArt ? { weapon: 0, anim: 'whirl', t: f.t } : { weapon: 0, anim: 'idle', t: 0 };
   if ((f.s === St.Idle || f.s === St.Walk || f.s === St.Run) && f.c > 0) return { weapon: 0, anim: 'cast', t: 0 };
   if (!f.w) return { weapon: 0, t: f.t };
   if (f.w === WID.Stick || hasArt) return { weapon: f.w, t: f.t };
