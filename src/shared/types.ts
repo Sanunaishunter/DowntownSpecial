@@ -68,6 +68,18 @@ export interface Fighter {
   /** dual swords: slashes in the current chain, and the ticks left to keep it going with another one */
   slash: number;
   slashT: number;
+  /** 1 = moved by the stage script, not by the AI (the envoy in the opening scene of 溫泉關) */
+  script: number;
+  /** hit counter: blows landed in a row, and the ticks left before it starts over */
+  chain: number;
+  chainT: number;
+  /** the move name being shouted (see CRY) and its ticks left */
+  cry: number;
+  cryT: number;
+  /** 1 = flying towards the hot spring: not held inside the walking area */
+  plunge: number;
+  /** 溫泉關 elite: 1 = elite, 2 = the traitor */
+  elite: number;
   jumpT: number;
   cd: number;
   aiT: number;
@@ -129,7 +141,8 @@ export interface PlayerSlot {
   rt: number;
 }
 
-export type GameEvent = [x: number, y: number, z: number, kind: number];
+/** x, y, z, kind, and for the damage numbers (kinds 6 and 7) the damage */
+export type GameEvent = [x: number, y: number, z: number, kind: number, value?: number];
 
 export interface World {
   tick: number;
@@ -151,6 +164,17 @@ export interface World {
   lap: number;
   /** ticks since the last wave of the lap was cleared */
   lapT: number;
+  /** which stage is on: 0 the Tokaido, 1 溫泉關 */
+  stage: 0 | 1;
+  /** 溫泉關: 0 opening scene, 1 fighting, 2 held */
+  phase: 0 | 1 | 2;
+  phaseT: number;
+  /** 溫泉關: enemies defeated, elites let in so far, and whether the traitor has shown up */
+  kills: number;
+  spawned: number;
+  traitor: number;
+  /** [code, ticks left] of the big text over the fight */
+  banner: [number, number] | null;
   slots: PlayerSlot[];
 }
 
@@ -184,10 +208,14 @@ export interface SnapFighter {
   ht: number;
   /** 光環 circle: [x, y, ticks left] while it is on the ground, otherwise empty */
   hl: number[];
-  /** buffs: 1 aura, 2 shield, 4 halo light, 8 a buff is about to end, 16 lightning storm */
+  /** buffs: 1 aura, 2 shield, 4 halo light, 8 a buff is about to end, 16 lightning storm, 32 elite, 64 traitor, 128 scripted (envoy) */
   b: number;
   /** cooldown ticks left per special (players only, empty for everyone else) */
   k: number[];
+  /** hit counter */
+  cb: number;
+  /** the move name being shouted, 0 = none */
+  cr: number;
 }
 
 export interface SnapShot {
@@ -222,6 +250,12 @@ export interface Snapshot {
   lk: 0 | 1;
   /** laps finished */
   lp: number;
+  /** stage, 溫泉關 phase, ticks in the phase, enemies defeated there, and the banner [code, ticks left] or [] */
+  sg: 0 | 1;
+  ph: number;
+  pt: number;
+  kl: number;
+  bn: number[];
   sl: SnapSlot[];
   f: SnapFighter[];
   it: SnapItem[];

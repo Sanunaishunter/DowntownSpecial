@@ -1,11 +1,16 @@
+import { COMBO, CRIT, CRY, CRY_TEXT, EV_CRIT, EV_DAMAGE } from '../src/shared/feel';
 import { describe, expect, it } from 'vitest';
 import { Btn } from '../src/shared/constants';
-import { addPlayer, createWorld, hit, snapshot, step } from '../src/shared/sim';
+import { addPlayer, createWorld, enterOnsen, hit, snapshot, step } from '../src/shared/sim';
 import { AURA, BARRAGE, BEAM, ENEMY_HALO, HALO, MP_MAX, SHIELD, SP, SPECIALS, TATSU, THUNDER, VOLLEY } from '../src/shared/specials';
-import { St, type Fighter, type PlayerInput, type World } from '../src/shared/types';
+import { St, type Fighter, type GameEvent, type PlayerInput, type World } from '../src/shared/types';
 import { GATLING, ITEM_1UP, ITEM_TONIC, TWIN, WEAPONS, WID } from '../src/shared/weapons';
 import { DEFS } from '../src/shared/defs';
 import { STAGE } from '../src/shared/stage';
+import { ONSEN, STAGE_ONSEN, STAGE_TOKAIDO } from '../src/shared/onsen';
+
+// exact damage numbers in these tests: no critical hits unless a test asks for them
+CRIT.chance = 0;
 
 const none: PlayerInput = { held: 0, pressed: 0 };
 
@@ -606,17 +611,35 @@ function atLapEnd() {
   return { w, p };
 }
 
+// The end of the Tokaido leads into 溫泉關; this skips through it: the opening scene is over and all fifty are down.
+function throughOnsen(w: World) {
+  run(w, 200);
+  expect(w.stage).toBe(STAGE_ONSEN);
+  w.phase = 1;
+  w.phaseT = 0;
+  w.kills = ONSEN.total;
+  w.spawned = ONSEN.total - 1;
+  w.traitor = 1;
+  w.fighters = w.fighters.filter((f) => f.kind === 'player');
+  run(w, ONSEN.clearDelay + 20);
+}
+
 describe('endless loop', () => {
-  it('after the last wave the next lap starts at once, keeping lives, score, weapon and cooldowns', () => {
+  it('after the general comes 溫泉關, then the next lap, keeping lives, score, weapon and cooldowns', () => {
     const { w, p } = atLapEnd();
     w.slots[0].lives = 2;
     w.slots[0].score = 4200;
     p.weapon = WID.Saber;
     p.wn = 12;
     p.hp = 33;
-    p.sp[SP.Aura] = 500;
+    p.sp[SP.Aura] = 5000;
     w.items.push({ id: w.nextId++, kind: WID.Bamboo, x: 1150, y: p.y, z: 0, vx: 0, vy: 0, vz: 0, owner: 0, n: 5 });
-    run(w, 400);
+    run(w, 200);
+    expect(w.stage).toBe(STAGE_ONSEN);
+    expect(w.lap).toBe(0);
+    expect(p.weapon).toBe(WID.Saber);
+    throughOnsen(w);
+    expect(w.stage).toBe(STAGE_TOKAIDO);
     expect(w.lap).toBe(1);
     expect(w.status).toBe(0);
     expect(w.cam).toBeLessThan(5);
@@ -628,14 +651,14 @@ describe('endless loop', () => {
     expect(p.wn).toBe(12);
     expect(p.hp).toBe(33);
     expect(p.sp[SP.Aura]).toBeGreaterThan(0);
-    const bamboo = w.items.find((i) => i.kind === WID.Bamboo)!;
-    expect(bamboo.n).toBe(5);
-    expect(bamboo.x).toBeLessThan(300);
+    // the weapon lying on the floor is gone; the one in the hand stays
+    expect(w.items.some((i) => i.kind === WID.Bamboo)).toBe(false);
   });
 
   it('the first wave comes again, and a second lap can follow', () => {
     const { w } = atLapEnd();
-    run(w, 250);
+    throughOnsen(w);
+    run(w, 100);
     expect(w.lap).toBe(1);
     expect(w.fighters.some((f) => f.kind !== 'player')).toBe(true);
     // beat the lap again
@@ -643,7 +666,7 @@ describe('endless loop', () => {
     w.locked = false;
     w.fighters = w.fighters.filter((f) => f.kind === 'player');
     w.cam = 1024;
-    run(w, 400);
+    throughOnsen(w);
     expect(w.lap).toBe(2);
   });
 
@@ -658,8 +681,9 @@ describe('endless loop', () => {
 
   it('reports the lap in the snapshot', () => {
     const { w } = atLapEnd();
-    run(w, 400);
+    throughOnsen(w);
     expect(snapshot(w).lp).toBe(1);
+    expect(snapshot(w).sg).toBe(STAGE_TOKAIDO);
   });
 });
 
@@ -681,7 +705,7 @@ describe('1UP', () => {
   it('stays on the ground until somebody takes it, even into the next lap', () => {
     const { w, p } = atLapEnd();
     w.items.push({ id: w.nextId++, kind: ITEM_1UP, x: 1010, y: p.y - 40, z: 0, vx: 0, vy: 0, vz: 0, owner: 0, n: 0 });
-    run(w, 400);
+    throughOnsen(w);
     expect(w.lap).toBe(1);
     expect(w.items.some((i) => i.kind === ITEM_1UP)).toBe(true);
   });
@@ -809,7 +833,7 @@ describe('tonic', () => {
     p.maxHp += 20;
     p.mpMax += 20;
     p.hp = 5;
-    run(w, 400);
+    throughOnsen(w);
     expect(w.lap).toBe(1);
     expect(p.maxHp).toBe(120);
     expect(p.mpMax).toBe(120);
@@ -1291,5 +1315,268 @@ describe('雙持 (two blades, one in each hand)', () => {
     hit(w, p, -1, 3, 1, true, 2, 1);
     expect([p.weapon, p.weapon2]).toEqual([0, 0]);
     expect(w.items.map((i) => i.kind).sort()).toEqual([WID.Bamboo, WID.Saber].sort());
+  });
+});
+
+describe('溫泉關', () => {
+  // Starts right at the opening scene, as the end of the Tokaido does.
+  const onsen = (seed = 11) => {
+    const w = setup(seed);
+    enterOnsen(w);
+    return w;
+  };
+  const toFight = (w: World) => {
+    run(w, ONSEN.intro.end + 2);
+    expect(w.phase).toBe(1);
+  };
+
+  it('starts on one locked screen with the heroes on the left, and the walking ground is shallow', () => {
+    const w = onsen();
+    const p = player(w);
+    expect(w.stage).toBe(STAGE_ONSEN);
+    expect(w.cam).toBe(0);
+    expect(w.camMax).toBe(0);
+    expect(p.x).toBeLessThan(100);
+    run(w, 10, { held: Btn.Down, pressed: 0 });
+    run(w, 200, { held: Btn.Down, pressed: 0 });
+    expect(p.y).toBeLessThanOrEqual(ONSEN.groundMax);
+    run(w, 400, { held: Btn.Up, pressed: 0 });
+    expect(p.y).toBeGreaterThanOrEqual(ONSEN.groundMin);
+  });
+
+  it('the opening scene cannot be steered; the envoy is kicked into the pool and the fight begins', () => {
+    const w = onsen();
+    const p = player(w);
+    const x0 = p.x;
+    let sawEnvoy = false;
+    let splash = false;
+    let xEnd = x0;
+    for (let i = 0; i < ONSEN.intro.end + 2; i++) {
+      step(w, [{ held: Btn.Right | Btn.A, pressed: i % 10 === 0 ? Btn.A : 0 }, undefined]);
+      if (i === ONSEN.intro.end - 4) xEnd = p.x;
+      if (w.fighters.some((f) => f.script)) sawEnvoy = true;
+      if (snapshot(w).ev.some((e) => e[3] === 5)) splash = true;
+    }
+    expect(Math.abs(xEnd - x0)).toBeLessThan(2);
+    expect(sawEnvoy).toBe(true);
+    expect(splash).toBe(true);
+    expect(w.fighters.some((f) => f.script)).toBe(false);
+    expect(w.phase).toBe(1);
+    expect(w.banner?.[0]).toBe(ONSEN.banner.title);
+    expect(w.kills).toBe(0);
+  });
+
+  it('elites come from the right a few at a time, stronger than the plain ones', () => {
+    const w = onsen();
+    toFight(w);
+    let most = 0;
+    for (let i = 0; i < 600; i++) {
+      step(w, [none, undefined]);
+      most = Math.max(most, w.fighters.filter((f) => f.kind !== 'player').length);
+    }
+    expect(most).toBe(ONSEN.cap);
+    const e = w.fighters.find((f) => f.kind !== 'player')!;
+    expect(e.elite).toBe(1);
+    expect(e.maxHp).toBeGreaterThanOrEqual(Math.round(DEFS[e.def].hp * ONSEN.hp));
+    expect(snapshot(w).f.find((f) => f.i === e.id)!.b & 32).toBe(32);
+  });
+
+  it('one more elite at a time each lap', () => {
+    const w = onsen();
+    w.lap = 2;
+    toFight(w);
+    let most = 0;
+    for (let i = 0; i < 900; i++) {
+      step(w, [none, undefined]);
+      most = Math.max(most, w.fighters.filter((f) => f.kind !== 'player').length);
+    }
+    expect(most).toBe(ONSEN.cap + 2);
+  });
+
+  it('the traitor walks in from the left at the 35th kill, and the pass is held at the 50th', () => {
+    const w = onsen();
+    toFight(w);
+    const p = player(w);
+    p.hp = p.maxHp = 999999;
+    w.kills = ONSEN.traitorAt - 1;
+    w.spawned = ONSEN.traitorAt - 1;
+    run(w, 5);
+    expect(w.fighters.some((f) => f.elite === 2)).toBe(false);
+    w.kills = ONSEN.traitorAt;
+    run(w, 2);
+    const t = w.fighters.find((f) => f.elite === 2)!;
+    expect(t).toBeTruthy();
+    expect(t.x).toBeLessThan(40);
+    expect(w.banner?.[0]).toBe(ONSEN.banner.traitor);
+    expect(snapshot(w).f.find((f) => f.i === t.id)!.b & 64).toBe(64);
+    // the rest is fought through
+    w.fighters = w.fighters.filter((f) => f.kind === 'player');
+    w.spawned = ONSEN.total - 1;
+    w.kills = ONSEN.total;
+    run(w, 3);
+    expect(w.phase).toBe(2);
+    expect(w.banner?.[0]).toBe(ONSEN.banner.cleared);
+    run(w, ONSEN.clearDelay + 5);
+    expect(w.stage).toBe(STAGE_TOKAIDO);
+    expect(w.lap).toBe(1);
+  });
+
+  it('kills are counted, and exactly fifty enemies come in all', () => {
+    const w = onsen(5);
+    toFight(w);
+    const p = player(w);
+    p.hp = p.maxHp = 9999999;
+    const seen = new Set<number>();
+    for (let i = 0; i < 60 * 60 * 5 && w.phase === 1; i++) {
+      // the hero is a wall: every enemy that is on the screen dies at once
+      for (const f of w.fighters) if (f.kind !== 'player') {
+        seen.add(f.id);
+        if (f.st !== St.Dead && f.st !== St.Down) f.hp = Math.min(f.hp, 0.0001);
+      }
+      for (const f of w.fighters) if (f.kind !== 'player' && f.st !== St.Dead && f.st !== St.Down) hit(w, f, 0, 9999, 1, true, 2, 1);
+      step(w, [none, undefined]);
+    }
+    expect(w.phase).toBe(2);
+    expect(w.kills).toBe(ONSEN.total);
+    expect(seen.size).toBe(ONSEN.total);
+  });
+
+  it('only what the heroes hold comes along: weapons on the floor are swept away at both ends', () => {
+    const w = setup();
+    const p = player(w);
+    p.weapon = WID.Saber;
+    p.wn = 20;
+    w.items.push({ id: w.nextId++, kind: WID.Rifle, x: p.x + 30, y: p.y, z: 0, vx: 0, vy: 0, vz: 0, owner: 0, n: 9 });
+    w.items.push({ id: w.nextId++, kind: ITEM_1UP, x: p.x + 40, y: p.y, z: 0, vx: 0, vy: 0, vz: 0, owner: 0, n: 0 });
+    enterOnsen(w);
+    expect(w.items.map((i) => i.kind)).toEqual([ITEM_1UP]);
+    expect(p.weapon).toBe(WID.Saber);
+    expect(p.wn).toBe(20);
+    toFight(w);
+    w.items.push({ id: w.nextId++, kind: WID.Stick, x: 100, y: p.y, z: 0, vx: 0, vy: 0, vz: 0, owner: 0, n: 5 });
+    w.phase = 2;
+    w.phaseT = ONSEN.clearDelay - 2;
+    w.fighters = w.fighters.filter((f) => f.kind === 'player');
+    run(w, 4);
+    expect(w.stage).toBe(STAGE_TOKAIDO);
+    expect(w.items.some((i) => i.kind === WID.Stick)).toBe(false);
+    expect(p.weapon).toBe(WID.Saber);
+  });
+
+  it('reports the stage, phase and kills in the snapshot', () => {
+    const w = onsen();
+    let s = snapshot(w);
+    expect([s.sg, s.ph]).toEqual([STAGE_ONSEN, 0]);
+    toFight(w);
+    w.kills = 7;
+    s = snapshot(w);
+    expect([s.sg, s.ph, s.kl]).toEqual([STAGE_ONSEN, 1, 7]);
+    expect(s.bn.length).toBe(2);
+  });
+});
+
+describe('攻擊N, 傷害數字, 爆擊, and shouting the move', () => {
+  const evs = (w: World) => snapshot(w).ev;
+
+  it('every blow that lands on an enemy counts, announces its damage, and the counter runs out after a while', () => {
+    const w = setup();
+    const p = player(w);
+    const e = foe(w, 18, 0, 'saburo', 'grunt', 9999);
+    e.aiT = 99999;
+    const seen: GameEvent[] = [];
+    press(w, Btn.A);
+    for (let i = 0; i < 30; i++) {
+      step(w, [none, undefined]);
+      for (const ev of evs(w)) if (ev[3] === EV_DAMAGE) seen.push(ev);
+    }
+    expect(seen.length).toBe(1);
+    expect(seen[0][4]).toBeGreaterThan(0);
+    expect(p.chain).toBe(1);
+    expect(snapshot(w).f.find((f) => f.i === p.id)!.cb).toBe(1);
+    run(w, COMBO.keep + 2);
+    expect(p.chain).toBe(0);
+  });
+
+  it('百裂拳 counts twenty and the hero shouts its name', () => {
+    const w = setup();
+    const p = player(w);
+    p.face = 1;
+    run(w, 3, { held: Btn.Right, pressed: 0 });
+    p.st = St.Run;
+    p.vx = 2;
+    press(w, Btn.A, Btn.Right);
+    run(w, 6, { held: Btn.Right, pressed: 0 });
+    expect(p.st).toBe(St.Barrage);
+    const e = foe(w, 14, 0, 'saburo', 'grunt', 9999);
+    e.face = -1;
+    expect(snapshot(w).f.find((f) => f.i === p.id)!.cr).toBe(CRY.barrage);
+    run(w, 100);
+    expect(p.chain).toBe(BARRAGE.punches);
+    expect(snapshot(w).f.find((f) => f.i === p.id)!.cr).toBe(0);
+  });
+
+  it('every special has its name shouted, 炫風斬 included', () => {
+    for (const s of SPECIALS) {
+      const w = setup();
+      const p = player(w);
+      press(w, s.bit);
+      expect(snapshot(w).f.find((f) => f.i === p.id)!.cr).toBe(CRY.special + s.id);
+      expect(CRY_TEXT[CRY.special + s.id]).toBeTruthy();
+    }
+    expect(CRY_TEXT[CRY.whirl]).toBe('炫風斬！');
+  });
+
+  it('a critical hit does double damage and is announced as one; the hero being hurt resets the counter', () => {
+    CRIT.chance = 1;
+    try {
+      const w = setup();
+      const p = player(w);
+      const e = foe(w, 18, 0, 'saburo', 'grunt', 9999);
+      e.aiT = 99999;
+      press(w, Btn.A);
+      let crit: GameEvent | undefined;
+      for (let i = 0; i < 30; i++) {
+        step(w, [none, undefined]);
+        crit = crit ?? evs(w).find((ev) => ev[3] === EV_CRIT);
+      }
+      expect(crit).toBeTruthy();
+      expect(e.maxHp - e.hp).toBe(crit![4]);
+      expect(crit![4]).toBe(Math.round(6 * CRIT.mult * DEFS[p.def].dmg));
+      expect(p.chain).toBe(1);
+      hit(w, p, -1, 3, 1, false, 0, 1);
+      expect(p.chain).toBe(0);
+    } finally {
+      CRIT.chance = 0;
+    }
+  });
+
+  it('is deterministic: the same world gives the same critical hits', () => {
+    CRIT.chance = 0.3;
+    try {
+      const play = () => {
+        const w = setup(5);
+        const e = foe(w, 18, 0, 'saburo', 'grunt', 99999);
+        e.aiT = 99999;
+        const out: number[] = [];
+        const p = player(w);
+        for (let i = 0; i < 600; i++) {
+          // a punch bag: stands right in front of the hero, however hard it is hit
+          e.x = p.x + 18;
+          e.y = p.y;
+          e.z = 0;
+          e.vx = e.vy = e.vz = 0;
+          e.st = St.Idle;
+          step(w, [{ held: 0, pressed: i % 14 === 0 ? Btn.A : 0 }, undefined]);
+          for (const ev of snapshot(w).ev) if (ev[3] === EV_CRIT || ev[3] === EV_DAMAGE) out.push(ev[3], ev[4] ?? 0);
+        }
+        return out;
+      };
+      const a = play();
+      expect(a.length).toBeGreaterThan(10);
+      expect(a).toEqual(play());
+      expect(a.filter((k, i) => i % 2 === 0 && k === EV_CRIT).length).toBeGreaterThan(0);
+    } finally {
+      CRIT.chance = 0;
+    }
   });
 });

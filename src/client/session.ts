@@ -1,5 +1,5 @@
 import { TICK_MS } from '../shared/constants';
-import { addPlayer, createWorld, snapshot, step } from '../shared/sim';
+import { addPlayer, createWorld, enterOnsen, snapshot, step } from '../shared/sim';
 import type { GameEvent, Snapshot, World } from '../shared/types';
 import { WEAPONS } from '../shared/weapons';
 import type { Input } from './input';
@@ -22,7 +22,7 @@ export class LocalSession implements Session {
 
   constructor(
     private input: Input,
-    practice: { weapon?: number } = {},
+    practice: { weapon?: number; stage?: number } = {},
   ) {
     this.world = createWorld((Math.random() * 2 ** 31) | 0);
     addPlayer(this.world, 0);
@@ -32,6 +32,7 @@ export class LocalSession implements Session {
       me.weapon = wd.id;
       me.wn = wd.uses;
     }
+    if (practice.stage === 1) enterOnsen(this.world);
     this.snap = snapshot(this.world);
   }
 
@@ -200,7 +201,7 @@ function lerpSnap(a: Snapshot, b: Snapshot, k: number): Snapshot {
   const prev = new Map(a.f.map((f) => [f.i, f]));
   const pitems = new Map(a.it.map((i) => [i.i, i]));
   // a new lap slides the whole world back, so there is nothing sensible to blend with
-  if (a.lp !== b.lp) return b;
+  if (a.lp !== b.lp || a.sg !== b.sg) return b;
   const mix = (p: number, q: number) => p + (q - p) * k;
   return {
     ...b,

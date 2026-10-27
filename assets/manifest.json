@@ -2080,5 +2080,12 @@
         ]
       }
     }
+  },
+  "_onsen": {
+    "image": "gen/bg_onsen.png",
+    "w": 256,
+    "h": 224,
+    "groundMin": 112,
+    "groundMax": 140
   }
 }

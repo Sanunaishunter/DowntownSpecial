@@ -1,8 +1,12 @@
+import { CRIT } from '../src/shared/feel';
 import { describe, expect, it } from 'vitest';
 import { Btn } from '../src/shared/constants';
 import { addPlayer, createWorld, snapshot, step } from '../src/shared/sim';
 import { St, type PlayerInput, type World } from '../src/shared/types';
 import { STAGE } from '../src/shared/stage';
+
+// exact damage numbers in these tests: no critical hits unless a test asks for them
+CRIT.chance = 0;
 
 const none: PlayerInput = { held: 0, pressed: 0 };
 

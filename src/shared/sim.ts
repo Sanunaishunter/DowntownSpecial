@@ -3,6 +3,8 @@ import { DEFS, PLAYER_DEFS } from './defs';
 import { AURA, BARRAGE, BEAM, ENEMY_HALO, HALO, MP_MAX, SHIELD, SP, SPECIALS, TATSU, THUNDER, VOLLEY } from './specials';
 import { STAGE, type WaveDef } from './stage';
 import { St, type Fighter, type PlayerInput, type Snapshot, type World } from './types';
+import { COMBO, CRIT, CRY, EV_CRIT, EV_DAMAGE } from './feel';
+import { ONSEN, STAGE_ONSEN, STAGE_TOKAIDO } from './onsen';
 import { BLADES, BULLET, GATLING, ITEM_1UP, ITEM_TONIC, SHURIKEN, TWIN, UNLIMITED, WEAPONS, WID, type AtkDef } from './weapons';
 
 const PEND_WINDOW = 3;
@@ -90,6 +92,13 @@ function mkFighter(w: World, def: string, slot: number, x: number, y: number): F
     tapT: 0,
     slash: 0,
     slashT: 0,
+    script: 0,
+    chain: 0,
+    chainT: 0,
+    cry: 0,
+    cryT: 0,
+    plunge: 0,
+    elite: 0,
     jumpT: 0,
     cd: 0,
     aiT: 0,
@@ -132,6 +141,13 @@ export function createWorld(seed = 1): World {
     statusT: 0,
     lap: 0,
     lapT: 0,
+    stage: STAGE_TOKAIDO,
+    phase: 0,
+    phaseT: 0,
+    kills: 0,
+    spawned: 0,
+    traitor: 0,
+    banner: null,
     slots: Array.from({ length: MAX_PLAYERS }, () => ({ a: 0 as const, lives: 3, score: 0, fid: 0, rt: 0 })),
   };
 }
@@ -151,6 +167,13 @@ export function resetWorld(w: World) {
   w.statusT = 0;
   w.lap = 0;
   w.lapT = 0;
+  w.stage = STAGE_TOKAIDO;
+  w.phase = 0;
+  w.phaseT = 0;
+  w.kills = 0;
+  w.spawned = 0;
+  w.traitor = 0;
+  w.banner = null;
   w.slots.forEach((s, i) => {
     s.a = 0;
     s.fid = 0;
@@ -165,7 +188,7 @@ export function addPlayer(w: World, slot: number) {
   s.lives = 3;
   s.score = 0;
   s.rt = 0;
-  const f = mkFighter(w, PLAYER_DEFS[slot], slot, w.cam + 40 + slot * 30, 170 + slot * 14);
+  const f = mkFighter(w, PLAYER_DEFS[slot], slot, w.cam + 40 + slot * 30, startY(w, slot));
   f.inv = 60;
   w.fighters.push(f);
   s.fid = f.id;
@@ -182,6 +205,12 @@ export function removePlayer(w: World, slot: number) {
   s.a = 0;
   s.fid = 0;
 }
+
+/** The ground the fighters may walk on depends on the stage. */
+const groundMin = (w: World) => (w.stage === STAGE_ONSEN ? ONSEN.groundMin : GROUND_MIN);
+const groundMax = (w: World) => (w.stage === STAGE_ONSEN ? ONSEN.groundMax : GROUND_MAX);
+/** Where a hero starts, or comes back after losing a life. */
+const startY = (w: World, slot: number) => (w.stage === STAGE_ONSEN ? ONSEN.groundMin + 8 + slot * 12 : 170 + slot * 14);
 
 function byId(w: World, id: number): Fighter | undefined {
   if (!id) return undefined;
@@ -201,7 +230,7 @@ export function step(w: World, inputs: Array<PlayerInput | undefined>) {
   w.stageT++;
   for (const f of w.fighters) {
     if (f.heldBy) continue;
-    if (isPlayer(f)) updatePlayer(w, f, inputs[f.slot]);
+    if (isPlayer(f)) updatePlayer(w, f, w.stage === STAGE_ONSEN && w.phase === 0 ? undefined : inputs[f.slot]);
     else updateEnemy(w, f);
   }
   for (const f of w.fighters) if (f.heldBy) placeHeld(w, f);
@@ -227,6 +256,8 @@ function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
   if (f.inv > 0) f.inv--;
   if (f.tapT > 0) f.tapT--;
   if (f.slashT > 0) f.slashT--;
+  if (f.chainT > 0 && --f.chainT === 0) f.chain = 0;
+  if (f.cryT > 0) f.cryT--;
   for (let i = 0; i < f.sp.length; i++) if (f.sp[i] > 0) f.sp[i]--;
   if (f.aura > 0) f.aura--;
   if (f.shield > 0) f.shield--;
@@ -363,6 +394,7 @@ function resolveAction(w: World, f: Fighter, a: boolean, b: boolean, dx: number)
     if (f.weapon || f.holding) return;
     if (a && f.st === St.Jump && f.jumpT <= UPPER_WINDOW) {
       setSt(f, St.Upper);
+      shout(f, CRY.upper);
       f.vz = Math.max(f.vz, 2.2);
       f.vx = f.face * 0.4;
     } else if (f.st === St.Jump) {
@@ -422,6 +454,7 @@ function resolveAction(w: World, f: Fighter, a: boolean, b: boolean, dx: number)
   if (f.st === St.Run) {
     // empty-handed run + A / B: 百裂拳 / 龍捲風腳
     setSt(f, a ? St.Barrage : St.Tatsu);
+    shout(f, a ? CRY.barrage : CRY.tatsu);
     f.vx = 0;
     f.vy = 0;
     return;
@@ -448,10 +481,36 @@ function slashTwin(f: Fighter) {
     f.slash = 0;
     f.slashT = 0;
     setSt(f, St.Whirl);
+    shout(f, CRY.whirl);
   } else {
     setSt(f, St.Swing);
     f.slashT = WEAPONS[otherHand(f) ? f.weapon2 : f.weapon].atk.total + TWIN.window;
   }
+}
+
+/** The hero calls out the name of a special move. */
+function shout(f: Fighter, code: number) {
+  f.cry = code;
+  f.cryT = CRY.dur;
+}
+
+/**
+ * A hero's blow lands on an enemy (`srcSlot` >= 0): maybe it is a critical hit, it counts into the hero's hit counter, and the
+ * damage is announced with an event for the number that flashes on screen. Returns the damage to apply.
+ */
+function strike(w: World, srcSlot: number, t: Fighter, dmg: number, canCrit = true): number {
+  const src = srcSlot >= 0 ? byId(w, w.slots[srcSlot]?.fid ?? 0) : undefined;
+  if (!src || !isPlayer(src) || isPlayer(t)) return dmg;
+  let crit = false;
+  if (canCrit) {
+    const h = Math.imul((w.tick * 31 + t.id * 131 + src.slot * 7919) | 0, 2654435761) >>> 0;
+    crit = ((h ^ (h >>> 15)) >>> 0) / 4294967296 < CRIT.chance;
+  }
+  if (crit) dmg = Math.round(dmg * CRIT.mult);
+  src.chain++;
+  src.chainT = COMBO.keep;
+  w.ev.push([t.x, t.y, t.z + 28, crit ? EV_CRIT : EV_DAMAGE, dmg]);
+  return dmg;
 }
 
 function nearestDowned(w: World, f: Fighter): Fighter | undefined {
@@ -570,6 +629,10 @@ function nearestPlayer(w: World, e: Fighter): Fighter | undefined {
 function updateEnemy(w: World, e: Fighter) {
   const d = DEFS[e.def];
   if (e.inv > 0) e.inv--;
+  if (e.script) {
+    updateBody(w, e);
+    return;
+  }
   if (e.halo > 0) e.halo--;
   if (e.sp[SP.Halo] > 0) e.sp[SP.Halo]--;
   if (e.st === St.Idle || e.st === St.Walk) {
@@ -652,7 +715,7 @@ function updateBody(w: World, f: Fighter) {
   const landed = wasAir && f.z === 0;
   if (isPlayer(f)) f.x = clamp(f.x, Math.max(8, w.cam + 8), Math.min(STAGE_W - 8, w.cam + SCREEN_W - 8));
   else f.x = clamp(f.x, 0, STAGE_W);
-  f.y = clamp(f.y, GROUND_MIN, GROUND_MAX);
+  if (!f.plunge) f.y = clamp(f.y, groundMin(w), groundMax(w));
 
   switch (f.st) {
     case St.Jump:
@@ -804,6 +867,7 @@ function die(w: World, f: Fighter) {
     f.spOn = 0;
   } else {
     if (f.lastSlot >= 0 && w.slots[f.lastSlot]) w.slots[f.lastSlot].score += DEFS[f.def].score;
+    if (w.stage === STAGE_ONSEN && !f.script) w.kills++;
     dropOnDeath(w, f);
   }
 }
@@ -812,6 +876,7 @@ function die(w: World, f: Fighter) {
 
 /** `chain`: part of a flurry (or a spray), so being hit again and again never counts towards the three-hit knockdown. */
 export function hit(w: World, t: Fighter, srcSlot: number, dmg: number, kbx: number, knock: boolean, launch: number, dir: number, chain = false) {
+  dmg = strike(w, srcSlot, t, dmg);
   // 百裂拳 and 龍捲風腳 cannot be interrupted: the hits still hurt, unless they would be lethal
   const firm = isPlayer(t) && (t.st === St.Barrage || t.st === St.Tatsu || t.st === St.Whirl);
   if (isPlayer(t) && (t.shield > 0 || firm)) {
@@ -827,6 +892,7 @@ export function hit(w: World, t: Fighter, srcSlot: number, dmg: number, kbx: num
   if (t.holding) dropHeld(w, t);
   t.pend = 0;
   t.pendT = 0;
+  if (isPlayer(t)) t.chain = 0;
   t.hp = Math.max(0, t.hp - dmg);
   if (srcSlot >= 0) t.lastSlot = srcSlot;
   t.combo++;
@@ -873,7 +939,7 @@ function applyAttacks(w: World) {
       const e = byId(w, a.holding);
       if (e) e.hp = Math.max(1, e.hp - 6);
     }
-    const mul = DEFS[a.def].dmg * (a.aura > 0 ? AURA.mult : 1) * (isPlayer(a) ? 1 : lapMul(w));
+    const mul = DEFS[a.def].dmg * (a.aura > 0 ? AURA.mult : 1) * (isPlayer(a) ? 1 : lapMul(w) * (a.elite ? ONSEN.dmg : 1));
     for (const t of w.fighters) {
       if (t === a || t.heldBy || isPlayer(t) === isPlayer(a)) continue;
       if (a.hits.includes(t.id)) continue;
@@ -887,7 +953,7 @@ function applyAttacks(w: World) {
       a.hits.push(t.id);
       const dmg = Math.max(1, Math.round(atk.dmg * mul));
       if (a.st === St.Stomp) {
-        t.hp = Math.max(0, t.hp - dmg);
+        t.hp = Math.max(0, t.hp - strike(w, a.slot, t, dmg));
         t.t = Math.min(t.t, 20);
         if (a.slot >= 0) t.lastSlot = a.slot;
         w.ev.push([t.x, t.y, 6, 0]);
@@ -944,7 +1010,7 @@ function updateItems(w: World) {
       }
     }
     it.x = clamp(it.x, 0, STAGE_W);
-    it.y = clamp(it.y, GROUND_MIN, GROUND_MAX);
+    it.y = clamp(it.y, groundMin(w), groundMax(w));
   }
 }
 
@@ -1030,6 +1096,7 @@ function triggerSpecial(w: World, f: Fighter, id: number) {
   f.buf = 0;
   f.bufT = 0;
   f.spOn = 1;
+  shout(f, CRY.special + id);
   switch (id) {
     case SP.Beam:
       setSt(f, St.Beam);
@@ -1181,6 +1248,7 @@ function updateBeam(w: World, f: Fighter) {
 
 /** Damage that keeps the target pinned in place (beam, lightning): no knockback unless it is the killing blow. */
 function pinHit(w: World, t: Fighter, srcSlot: number, dmg: number, dir: number) {
+  dmg = strike(w, srcSlot, t, dmg, false);
   if (t.holding) dropHeld(w, t);
   t.hp = Math.max(0, t.hp - dmg);
   t.lastSlot = srcSlot;
@@ -1250,7 +1318,7 @@ function tickStorm(w: World, f: Fighter) {
     sy = t.y;
   } else {
     sx = w.cam + 8 + rand(w) * (SCREEN_W - 16);
-    sy = GROUND_MIN + rand(w) * (GROUND_MAX - GROUND_MIN);
+    sy = groundMin(w) + rand(w) * (groundMax(w) - groundMin(w));
   }
   w.ev.push([sx, sy, 0, 4]);
   const dmg = Math.max(1, Math.round(THUNDER.dmg * DEFS[f.def].dmg * (f.aura > 0 ? AURA.mult : 1)));
@@ -1274,7 +1342,7 @@ function spawnWave(w: World, wd: WaveDef) {
   const crowd = wd.enemies.filter((e) => DEFS[e.def].kind !== 'boss');
   for (let k = 0; k < w.lap && crowd.length; k++) {
     const t = crowd[k % crowd.length];
-    list.push({ def: t.def, side: k % 2 ? ((-t.side) as 1 | -1) : t.side, y: clamp(t.y + ((k * 37) % 50) - 25, GROUND_MIN, GROUND_MAX), dx: 40 + 22 * k });
+    list.push({ def: t.def, side: k % 2 ? ((-t.side) as 1 | -1) : t.side, y: clamp(t.y + ((k * 37) % 50) - 25, groundMin(w), groundMax(w)), dx: 40 + 22 * k });
   }
   const mul = lapMul(w);
   for (const e of list) {
@@ -1294,6 +1362,7 @@ function spawnWave(w: World, wd: WaveDef) {
 
 function updateStage(w: World) {
   const waves = STAGE.waves;
+  if (w.banner && --w.banner[1] <= 0) w.banner = null;
 
   for (const s of w.slots) {
     if (!s.a) continue;
@@ -1303,7 +1372,7 @@ function updateStage(w: World) {
       if (s.rt >= 90 && s.lives > 0) {
         f.hp = f.maxHp;
         f.x = w.cam + 40 + f.slot * 30;
-        f.y = 170 + f.slot * 14;
+        f.y = startY(w, f.slot);
         f.z = 0;
         f.vx = f.vy = f.vz = 0;
         f.inv = 90;
@@ -1321,16 +1390,19 @@ function updateStage(w: World) {
   }
 
   if (w.status === 0) {
-    if (!w.locked && w.wave < waves.length && w.stageT >= 60 && w.cam >= waves[w.wave].at - 0.5) {
-      spawnWave(w, waves[w.wave]);
-      w.locked = true;
-      w.camMax = waves[w.wave].at;
-    } else if (w.locked && !w.fighters.some((f) => !isPlayer(f))) {
-      w.locked = false;
-      w.wave++;
-      w.camMax = w.wave < waves.length ? waves[w.wave].at : STAGE_W - SCREEN_W;
+    if (w.stage === STAGE_ONSEN) updateOnsen(w);
+    else {
+      if (!w.locked && w.wave < waves.length && w.stageT >= 60 && w.cam >= waves[w.wave].at - 0.5) {
+        spawnWave(w, waves[w.wave]);
+        w.locked = true;
+        w.camMax = waves[w.wave].at;
+      } else if (w.locked && !w.fighters.some((f) => !isPlayer(f))) {
+        w.locked = false;
+        w.wave++;
+        w.camMax = w.wave < waves.length ? waves[w.wave].at : STAGE_W - SCREEN_W;
+      }
+      if (!w.locked && w.wave >= waves.length && ++w.lapT >= LAP_DELAY) enterOnsen(w);
     }
-    if (!w.locked && w.wave >= waves.length && ++w.lapT >= LAP_DELAY) nextLap(w);
     const act = w.slots.filter((s) => s.a);
     if (act.length && act.every((s) => s.lives <= 0)) {
       w.status = 2;
@@ -1343,18 +1415,70 @@ function updateStage(w: World) {
 }
 
 /**
- * The stage never ends: once the general and the last wave are down, everything (heroes, items lying around, shots) slides
- * back by one stage length and the first wave comes again. Lives, score, weapons and cooldowns carry over.
+ * Between stages the floor is swept: weapons lying about are gone, only what the heroes hold comes along. The 1UP and the
+ * tonics are not weapons, so they wait for the heroes at the start of the next stage.
  */
-function nextLap(w: World) {
-  const shift = w.cam;
-  for (const f of w.fighters) {
-    f.x = Math.max(0, f.x - shift);
-    f.haloX -= shift;
-  }
-  for (const it of w.items) it.x = Math.max(0, it.x - shift);
-  for (const s of w.shots) s.x -= shift;
+function sweepFloor(w: World) {
+  w.items = w.items.filter((it) => it.kind >= ITEM_1UP);
+  w.items.forEach((it, i) => {
+    it.x = w.cam + 90 + i * 16;
+    it.y = groundMin(w) + 12 + (i % 2) * 8;
+    it.z = 0;
+    it.vx = it.vy = it.vz = 0;
+  });
+  w.shots = [];
   w.ev.length = 0;
+  w.fighters = w.fighters.filter((f) => isPlayer(f));
+}
+
+function resetHeroes(w: World, face: 1 | -1) {
+  for (const f of w.fighters) {
+    if (!isPlayer(f)) continue;
+    f.x = w.cam + 40 + f.slot * 30;
+    f.y = startY(w, f.slot);
+    f.z = 0;
+    f.vx = f.vy = f.vz = 0;
+    f.halo = 0;
+    f.holding = 0;
+    f.pend = 0;
+    f.buf = 0;
+    f.slash = 0;
+    f.slashT = 0;
+    if (f.st !== St.Dead) {
+      setSt(f, St.Idle);
+      f.face = face;
+    }
+  }
+}
+
+/**
+ * The general is down: on to 溫泉關. The camera stays on one screen, the heroes line up on the left, an envoy walks in.
+ */
+export function enterOnsen(w: World) {
+  w.stage = STAGE_ONSEN;
+  w.phase = 0;
+  w.phaseT = 0;
+  w.kills = 0;
+  w.spawned = 0;
+  w.traitor = 0;
+  w.banner = null;
+  w.cam = 0;
+  w.camMax = 0;
+  w.locked = true;
+  w.stageT = 0;
+  w.lapT = 0;
+  sweepFloor(w);
+  resetHeroes(w, 1);
+  // the one who talks and kicks stands closest to the envoy
+  for (const f of w.fighters) if (isPlayer(f)) f.x = 64 - f.slot * 26;
+}
+
+/** The pass is held: the Tokaido starts again, one lap tougher. */
+function nextLap(w: World) {
+  w.stage = STAGE_TOKAIDO;
+  w.phase = 0;
+  w.phaseT = 0;
+  w.banner = null;
   w.cam = 0;
   w.camMax = STAGE.waves[0].at;
   w.wave = 0;
@@ -1362,6 +1486,114 @@ function nextLap(w: World) {
   w.stageT = 0;
   w.lapT = 0;
   w.lap++;
+  sweepFloor(w);
+  resetHeroes(w, 1);
+}
+
+const leadHero = (w: World) => w.fighters.filter((f) => isPlayer(f) && f.hp > 0 && f.st !== St.Dead).sort((a, b) => a.slot - b.slot)[0];
+
+function setBanner(w: World, code: number, ticks: number) {
+  w.banner = [code, ticks];
+}
+
+function updateOnsen(w: World) {
+  w.phaseT++;
+  if (w.phase === 0) runIntro(w);
+  else if (w.phase === 1) runFight(w);
+  else if (w.phaseT >= ONSEN.clearDelay) nextLap(w);
+}
+
+/**
+ * The opening scene: an envoy walks up and offers surrender, the hero says nothing ("。。。") and kicks him into the hot spring.
+ * The heroes cannot be steered meanwhile; the words are drawn by the client from the timeline in ONSEN.intro.
+ */
+function runIntro(w: World) {
+  const I = ONSEN.intro;
+  const t = w.phaseT;
+  const lead = leadHero(w);
+  let envoy = w.fighters.find((f) => f.script);
+  if (!envoy && t === 1 && lead) {
+    envoy = mkFighter(w, 'bushi', -1, SCREEN_W + 14, lead.y);
+    envoy.script = 1;
+    envoy.maxHp = envoy.hp = 99999;
+    envoy.face = -1;
+    w.fighters.push(envoy);
+  }
+  if (envoy && lead && !envoy.plunge) {
+    envoy.y = lead.y;
+    if (t >= I.start && envoy.x > lead.x + I.gap) {
+      envoy.vx = -I.speed;
+      envoy.st = St.Walk;
+    } else {
+      envoy.vx = 0;
+      if (envoy.st === St.Walk) setSt(envoy, St.Idle);
+    }
+  }
+  if (lead && t === I.kick) {
+    setSt(lead, St.Kick);
+    lead.face = 1;
+  }
+  if (envoy && t === I.kick + 5) {
+    // the foot lands: he flies out over the edge, down into the pool at the front of the screen
+    setSt(envoy, St.Down);
+    envoy.plunge = 1;
+    envoy.z = 1;
+    envoy.vz = I.fly.vz;
+    envoy.vx = I.fly.vx;
+    envoy.vy = I.fly.vy;
+    w.ev.push([envoy.x, envoy.y, 14, 1]);
+  }
+  if (envoy?.plunge && envoy.z <= 0 && envoy.t >= 3) {
+    w.ev.push([envoy.x, envoy.y, 0, 5]);
+    w.fighters = w.fighters.filter((f) => f !== envoy);
+  }
+  if (t >= I.end) {
+    w.phase = 1;
+    w.phaseT = 0;
+    setBanner(w, ONSEN.banner.title, ONSEN.banner.titleT);
+    for (const f of w.fighters) if (isPlayer(f)) f.inv = Math.max(f.inv, 30);
+  }
+}
+
+/** Elites keep coming until fifty have fallen; the traitor is one of the fifty and walks in from behind. */
+function runFight(w: World) {
+  const foes = w.fighters.filter((f) => !isPlayer(f) && f.st !== St.Dead);
+  const quota = ONSEN.total - 1;
+  if (w.spawned < quota && foes.length < ONSEN.cap + w.lap && w.phaseT % ONSEN.spawnGap === 0) spawnElite(w, false);
+  if (!w.traitor && w.kills >= ONSEN.traitorAt) {
+    w.traitor = 1;
+    spawnElite(w, true);
+    setBanner(w, ONSEN.banner.traitor, ONSEN.banner.traitorT);
+  }
+  if (w.kills >= ONSEN.total && !foes.length) {
+    w.phase = 2;
+    w.phaseT = 0;
+    setBanner(w, ONSEN.banner.cleared, ONSEN.banner.clearedT);
+  }
+}
+
+function spawnElite(w: World, traitor: boolean) {
+  let def = 'bushi';
+  if (!traitor) {
+    let r = rand(w);
+    for (const [d, p] of ONSEN.mix) {
+      if (r < p) {
+        def = d;
+        break;
+      }
+      r -= p;
+    }
+    w.spawned++;
+  }
+  const y = groundMin(w) + 4 + rand(w) * (groundMax(w) - groundMin(w) - 8);
+  const x = traitor ? w.cam - 16 : w.cam + SCREEN_W + 14 + rand(w) * 24;
+  const f = mkFighter(w, def, -1, x, y);
+  f.maxHp = Math.round(f.maxHp * lapMul(w) * ONSEN.hp * (traitor ? ONSEN.traitorHp : 1));
+  f.hp = f.maxHp;
+  f.elite = traitor ? 2 : 1;
+  f.face = traitor ? 1 : -1;
+  f.cd = 40 + Math.floor(rand(w) * 60);
+  w.fighters.push(f);
 }
 
 /** The 1UP and the tonic are taken just by walking over them. */
@@ -1397,6 +1629,11 @@ export function snapshot(w: World): Snapshot {
     wt: STAGE.waves.length,
     lk: w.locked ? 1 : 0,
     lp: w.lap,
+    sg: w.stage,
+    ph: w.phase,
+    pt: w.phaseT,
+    kl: w.kills,
+    bn: w.banner ? [w.banner[0], w.banner[1]] : [],
     sl: w.slots.map((s) => ({ a: s.a, l: s.lives, p: s.score, f: s.fid })),
     f: w.fighters.map((f) => ({
       i: f.id,
@@ -1418,13 +1655,15 @@ export function snapshot(w: World): Snapshot {
       n2: f.wn2,
       c: f.cast,
       ht: f.heatCd > 0 ? 500 + Math.ceil(f.heatCd / 60) : f.heat,
-      b: (f.storm > 0 ? 16 : 0) | (f.aura > 0 ? 1 : 0) | (f.shield > 0 ? 2 : 0) | (f.halo > 0 ? 4 : 0) | ((f.aura > 0 && f.aura < 120) || (f.shield > 0 && f.shield < 120) ? 8 : 0),
+      b: (f.storm > 0 ? 16 : 0) | (f.elite === 1 ? 32 : 0) | (f.elite === 2 ? 64 : 0) | (f.script ? 128 : 0) | (f.aura > 0 ? 1 : 0) | (f.shield > 0 ? 2 : 0) | (f.halo > 0 ? 4 : 0) | ((f.aura > 0 && f.aura < 120) || (f.shield > 0 && f.shield < 120) ? 8 : 0),
       k: f.kind === 'player' ? f.sp.slice() : [],
+      cb: f.kind === 'player' ? f.chain : 0,
+      cr: f.cryT > 0 ? f.cry : 0,
       hl: f.halo > 0 ? [r1(f.haloX), r1(f.haloY), f.halo] : [],
     })),
     it: w.items.map((i) => ({ i: i.id, k: i.kind, x: r1(i.x), y: r1(i.y), z: r1(i.z) })),
     sh: w.shots.map((s) => ({ k: s.kind, x: r1(s.x), y: r1(s.y), z: r1(s.z), r: (s.vx >= 0 ? 1 : -1) as 1 | -1 })),
-    ev: w.ev.map((e) => [r1(e[0]), r1(e[1]), r1(e[2]), e[3]] as Snapshot['ev'][number]),
+    ev: w.ev.map((e) => (e.length > 4 ? [r1(e[0]), r1(e[1]), r1(e[2]), e[3], e[4]] : [r1(e[0]), r1(e[1]), r1(e[2]), e[3]]) as Snapshot['ev'][number]),
   };
   w.ev.length = 0;
   return snap;

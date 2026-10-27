@@ -1,4 +1,6 @@
 import { SCREEN_H, SCREEN_W, STAGE_W } from '../shared/constants';
+import { ONSEN } from '../shared/onsen';
+import { CRY_TEXT, EV_CRIT, EV_DAMAGE } from '../shared/feel';
 import { DEFS } from '../shared/defs';
 import { BEAM, HALO, MP_MAX, SPECIALS } from '../shared/specials';
 import { St, type GameEvent, type SnapFighter, type SnapItem, type Snapshot } from '../shared/types';
@@ -18,6 +20,8 @@ interface Fx {
   z: number;
   k: number;
   t0: number;
+  /** damage, for the numbers */
+  v: number;
 }
 
 export interface DrawOpts {
@@ -34,6 +38,12 @@ export class Renderer {
   private buffT0 = new Map<string, number>();
   private fxCanvas = document.createElement('canvas');
   private lap = 0;
+  private stg = 0;
+  private shakeT0 = -1e9;
+  private combo = [
+    { n: 0, t0: -1e9 },
+    { n: 0, t0: -1e9 },
+  ];
   private lapT0 = -1e9;
 
   constructor(
@@ -53,8 +63,11 @@ export class Renderer {
   }
 
   addFx(events: GameEvent[], now: number) {
-    for (const e of events) this.fx.push({ x: e[0], y: e[1], z: e[2], k: e[3], t0: now });
-    if (this.fx.length > 40) this.fx.splice(0, this.fx.length - 40);
+    for (const e of events) {
+      this.fx.push({ x: e[0], y: e[1], z: e[2], k: e[3], t0: now, v: e[4] ?? 0 });
+      if (e[3] === EV_CRIT) this.shakeT0 = now;
+    }
+    if (this.fx.length > 110) this.fx.splice(0, this.fx.length - 110);
   }
 
   draw(snap: Snapshot | null, o: DrawOpts) {
@@ -62,8 +75,18 @@ export class Renderer {
     ctx.setTransform(this.s, 0, 0, this.s, 0, 0);
     ctx.imageSmoothingEnabled = false;
     const cam = snap ? snap.c : 0;
-    if (!this.assets.drawBackdrop(ctx, cam, SCREEN_W)) drawBackground(ctx, cam);
-    tintForTime(ctx, cam);
+    // a critical hit shakes the whole picture for a moment
+    const shake = Math.max(0, 1 - (o.now - this.shakeT0) / 170);
+    const shx = Math.round(Math.sin(o.now * 0.09) * 3 * shake);
+    const shy = Math.round(Math.cos(o.now * 0.13) * 2.5 * shake);
+    ctx.translate(shx, shy);
+    if (snap?.sg === 1) {
+      if (!this.assets.drawOnsen(ctx)) drawOnsenFallback(ctx);
+      drawOnsenSteam(ctx, o.now);
+    } else {
+      if (!this.assets.drawBackdrop(ctx, cam, SCREEN_W)) drawBackground(ctx, cam);
+      tintForTime(ctx, cam);
+    }
     if (!snap) return;
 
     // 天雷萬鈞: the whole picture darkens while the storm lasts and flashes white on every strike
@@ -76,6 +99,10 @@ export class Renderer {
       if (e.k === 4 && age < 90) {
         ctx.fillStyle = `rgba(255,255,255,${0.32 * (1 - age / 90)})`;
         ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
+      }
+      if (e.k === EV_CRIT && age < 110) {
+        ctx.fillStyle = `rgba(255,236,190,${0.22 * (1 - age / 110)})`;
+        ctx.fillRect(-4, -4, SCREEN_W + 8, SCREEN_H + 8);
       }
     }
 
@@ -94,28 +121,76 @@ export class Renderer {
     for (const f of fs) if (f.s === St.Beam) drawBeam(ctx, f, cam, o.now);
     for (const s of snap.sh) drawShot(ctx, s, cam, o.now);
 
-    this.fx = this.fx.filter((e) => o.now - e.t0 < (e.k === 4 ? 280 : 200));
+    this.fx = this.fx.filter((e) => o.now - e.t0 < (e.k === 4 ? 280 : e.k === 5 ? 800 : e.k === EV_DAMAGE ? 650 : e.k === EV_CRIT ? 950 : 200));
     for (const e of this.fx) {
       if (e.k === 4) drawBolt(ctx, e, cam, (o.now - e.t0) / 280);
+      else if (e.k === 5) drawSplash(ctx, e, cam, (o.now - e.t0) / 800);
+      else if (e.k === EV_DAMAGE || e.k === EV_CRIT) drawDamage(ctx, e, cam, o.now - e.t0);
       else drawSpark(ctx, e, cam, (o.now - e.t0) / 200);
     }
+    // special moves are shouted out loud
+    for (const f of snap.f) if (f.cr && CRY_TEXT[f.cr]) drawBubble(ctx, f.x - cam, f.y - Math.round(f.z) - 56, CRY_TEXT[f.cr], '#d01818');
+    if (snap.sg === 1 && snap.ph === 0) drawOnsenTalk(ctx, snap);
 
+    ctx.translate(-shx, -shy);
     drawHud(ctx, snap, o);
+    this.drawCombo(snap, o.now);
+    if (snap.bn.length) drawBanner(ctx, snap.bn[0], snap.bn[1]);
 
-    // a new lap: cut to black on the stage start, then fade the title and the picture back in
-    if (snap.lp !== this.lap) {
-      if (snap.lp > this.lap) this.lapT0 = o.now;
+    // a new lap or stage: cut to black on the stage start, then fade the title and the picture back in
+    if (snap.lp !== this.lap || snap.sg !== this.stg) {
+      if (snap.lp > this.lap || snap.sg !== this.stg) this.lapT0 = o.now;
       this.lap = snap.lp;
+      this.stg = snap.sg;
     }
     const fade = 1 - (o.now - this.lapT0) / LAP_FADE_MS;
     if (fade > 0) {
       ctx.fillStyle = `rgba(0,0,0,${Math.min(1, fade * 1.6)})`;
       ctx.fillRect(0, 0, SCREEN_W, SCREEN_H);
       ctx.globalAlpha = Math.min(1, fade * 2);
-      text(ctx, '東海道', SCREEN_W / 2, 88, '#ffe060', 'center', 20);
-      text(ctx, `第 ${snap.lp + 1} 周`, SCREEN_W / 2, 114, '#ffffff', 'center', 12);
+      if (snap.sg === 1) {
+        text(ctx, '溫泉關', SCREEN_W / 2, 88, '#ffe060', 'center', 20);
+        text(ctx, `第 ${snap.lp + 1} 周`, SCREEN_W / 2, 114, '#ffffff', 'center', 12);
+      } else {
+        text(ctx, '東海道', SCREEN_W / 2, 88, '#ffe060', 'center', 20);
+        text(ctx, `第 ${snap.lp + 1} 周`, SCREEN_W / 2, 114, '#ffffff', 'center', 12);
+      }
       ctx.globalAlpha = 1;
     }
+  }
+
+  // 攻擊N: how many blows each hero has landed in a row, at the bottom of the screen; it jumps on every new blow.
+  private drawCombo(snap: Snapshot, now: number) {
+    const ctx = this.ctx;
+    snap.sl.forEach((s, i) => {
+      if (!s.a || i > 1) return;
+      const n = snap.f.find((q) => q.i === s.f)?.cb ?? 0;
+      const st = this.combo[i];
+      if (n !== st.n) {
+        if (n > 0) st.t0 = now;
+        st.n = n;
+      }
+      if (n <= 0) return;
+      const bump = Math.max(0, 1 - (now - st.t0) / 160);
+      const tier = n < 10 ? 0 : n < 25 ? 1 : n < 50 ? 2 : 3;
+      const size = (15 + tier * 3 + Math.min(6, n / 25)) * (1 + 0.5 * bump);
+      const jit = tier >= 3 ? Math.round(Math.sin(now * 0.11)) : 0;
+      const cx = i === 0 ? 78 : SCREEN_W - 78;
+      const y = SCREEN_H - 24;
+      const fontOf = (px: number) => `900 ${px}px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif`;
+      ctx.save();
+      ctx.textBaseline = 'alphabetic';
+      ctx.textAlign = 'left';
+      ctx.font = fontOf(size);
+      const wn = ctx.measureText(String(n)).width;
+      ctx.font = fontOf(9);
+      const wl = ctx.measureText('攻擊').width;
+      const x0 = Math.round(cx - (wl + 4 + wn) / 2);
+      const col = ['#ffffff', '#ffe060', '#ff9030', '#ff4040'][tier];
+      outlined(ctx, '攻擊', x0, y, fontOf(9), '#ffffff', 2.5);
+      outlined(ctx, String(n), x0 + wl + 4, y + jit, fontOf(size), col, 3.5);
+      ctx.restore();
+    });
   }
 
   private drawFighter(f: SnapFighter, cam: number, now: number) {
@@ -126,6 +201,14 @@ export class Renderer {
     const ox = Math.round(f.x - cam);
     const oy = Math.round(f.y);
     shadow(ctx, ox, oy, f.z, f.s === St.Down || dead || f.s === St.Held ? 14 : 9);
+    if (!dead && f.b & 96) {
+      // 溫泉關 elites carry a red ring on the ground, the traitor a purple one
+      ctx.strokeStyle = f.b & 64 ? 'rgba(190,100,255,0.9)' : 'rgba(255,60,60,0.75)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(ox, oy, f.b & 64 ? 15 : 12, f.b & 64 ? 5.5 : 4.5, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     const since = (kind: string, on: boolean) => {
       const key = `${f.i}:${kind}`;
       if (!on) {
@@ -398,6 +481,154 @@ function drawWhirl(ctx: CanvasRenderingContext2D, ox: number, oy: number, t: num
     ctx.fillRect(-13, -2, 26, 5);
     ctx.fillStyle = '#e8b890';
     ctx.fillRect(-12, -1, 24, 3);
+  }
+  ctx.restore();
+}
+
+// 溫泉關 without its picture: a plain dusk sky, a sand strip and water.
+function drawOnsenFallback(ctx: CanvasRenderingContext2D) {
+  const R = (c: string, y: number, h: number) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(0, y, SCREEN_W, h);
+  };
+  R('#c8643a', 0, 100);
+  R('#4a3a5a', 100, 10);
+  R('#d8a060', 110, 32);
+  R('#5a3a2a', 142, 8);
+  R('#2a6a7a', 150, 74);
+}
+
+// Steam drifting up from the hot spring pool at the front of the 溫泉關 picture, and a few glints on the water.
+function drawOnsenSteam(ctx: CanvasRenderingContext2D, now: number) {
+  ctx.save();
+  for (let k = 0; k < 11; k++) {
+    const p = (now / 5200 + k * 0.0909) % 1;
+    const x = 18 + k * 21 + Math.sin(now / 1800 + k * 1.7) * 6;
+    const y = 222 - p * 70;
+    // a soft puff: the middle is the whitest and it fades to nothing at the rim
+    const r = 8 + p * 12;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    const al = Math.sin(p * Math.PI) * 0.34;
+    g.addColorStop(0, `rgba(255,255,255,${al})`);
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - r, y - r * 0.6, r * 2, r * 1.2);
+  }
+  for (let k = 0; k < 7; k++) {
+    if (Math.floor(now / 380 + k * 3) % 4 !== 0) continue;
+    ctx.fillStyle = 'rgba(220,255,255,0.8)';
+    ctx.fillRect(44 + ((k * 53) % 150), 204 + ((k * 7) % 14), 2, 1);
+  }
+  ctx.restore();
+}
+
+// The envoy is kicked into the pool: rings spread over the water and drops fly up and come down.
+function drawSplash(ctx: CanvasRenderingContext2D, e: Fx, cam: number, k: number) {
+  const x = Math.round(e.x - cam);
+  const y = Math.round(e.y);
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, 1 - k);
+  ctx.strokeStyle = '#e8ffff';
+  ctx.lineWidth = 1.2;
+  for (let i = 0; i < 2; i++) {
+    const r = (k * 22 + i * 7) % 26;
+    ctx.beginPath();
+    ctx.ellipse(x, y, r + 2, (r + 2) * 0.35, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#ffffff';
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    const rise = Math.sin(Math.min(1, k * 1.6) * Math.PI) * (16 + (i % 3) * 9);
+    ctx.fillRect(Math.round(x + Math.cos(a) * (4 + k * 18)), Math.round(y - rise + Math.sin(a) * 2), 2, 2);
+  }
+  ctx.restore();
+}
+
+// 溫泉關's opening: what the envoy and the hero say.
+function drawOnsenTalk(ctx: CanvasRenderingContext2D, snap: Snapshot) {
+  const I = ONSEN.intro;
+  const envoy = snap.f.find((f) => f.b & 128);
+  const hero = snap.f.find((f) => DEFS[f.d]?.kind === 'player');
+  if (envoy && snap.pt >= I.say1[0] && snap.pt < I.say1[1]) drawBubble(ctx, envoy.x, envoy.y - 54, '投降吧，饒你不死！');
+  if (hero && snap.pt >= I.say2[0] && snap.pt < I.kick + 4) {
+    const dots = Math.min(3, 1 + Math.floor((snap.pt - I.say2[0]) / 22));
+    drawBubble(ctx, hero.x, hero.y - 54, '。'.repeat(dots));
+  }
+}
+
+function outlined(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, font: string, fill: string, line: number) {
+  ctx.font = font;
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = line;
+  ctx.strokeStyle = '#000';
+  ctx.strokeText(s, x, y);
+  ctx.fillStyle = fill;
+  ctx.fillText(s, x, y);
+}
+
+// The damage of a blow: it pops big, floats up and fades, flickering between colours. A critical hit is bigger, redder and
+// flashes harder, with 爆擊 over it.
+function drawDamage(ctx: CanvasRenderingContext2D, e: Fx, cam: number, age: number) {
+  const crit = e.k === EV_CRIT;
+  const dur = crit ? 950 : 650;
+  const k = age / dur;
+  const jx = ((Math.imul(Math.round(e.t0) | 0, 2654435761) >>> 0) % 17) - 8;
+  const pop = Math.max(0, 1 - age / (crit ? 170 : 110));
+  const base = crit ? 17 : Math.min(13, 8 + e.v / 5);
+  const size = base * (1 + (crit ? 1.1 : 0.7) * pop);
+  const rise = (crit ? 28 : 20) * (1 - (1 - k) * (1 - k));
+  const x = Math.round(e.x - cam + jx * (crit ? 0.6 : 1));
+  const y = Math.round(e.y - e.z - rise);
+  const flick = Math.floor(age / (crit ? 55 : 70));
+  const col = crit ? ['#ff3030', '#ffe040', '#ffffff'][flick % 3] : ['#ffffff', '#ffe060'][flick % 2];
+  const font = (px: number) => `900 ${px}px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif`;
+  ctx.save();
+  ctx.globalAlpha = k < 0.7 ? 1 : Math.max(0, (1 - k) / 0.3);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  outlined(ctx, String(e.v), x, y, font(size), col, crit ? 4 : 3);
+  if (crit) outlined(ctx, '爆擊', x, y - size - 1, font(8), flick % 2 ? '#ffe040' : '#ff6030', 2.5);
+  ctx.restore();
+}
+
+function drawBubble(ctx: CanvasRenderingContext2D, x: number, y: number, s: string, color = '#000') {
+  ctx.font = 'bold 9px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
+  const w = Math.ceil(ctx.measureText(s).width) + 10;
+  const h = 15;
+  const bx = Math.max(2, Math.min(SCREEN_W - w - 2, Math.round(x - w / 2)));
+  const by = Math.round(y - h);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(bx - 1, by - 1, w + 2, h + 2);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(bx, by, w, h);
+  const tx = Math.max(bx + 3, Math.min(bx + w - 7, Math.round(x - 2)));
+  ctx.fillStyle = '#000';
+  ctx.fillRect(tx - 1, by + h, 6, 3);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(tx, by + h, 4, 2);
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(s, bx + w / 2, by + 3);
+}
+
+// Big text over the fight: the stage title, the traitor, the pass held.
+function drawBanner(ctx: CanvasRenderingContext2D, code: number, ticks: number) {
+  const B = ONSEN.banner;
+  const total = code === B.title ? B.titleT : code === B.cleared ? B.clearedT : B.traitorT;
+  const a = Math.min(1, ticks / 30, (total - ticks) / 12 + 0.01);
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, a);
+  if (code === B.title) {
+    text(ctx, '溫泉關', SCREEN_W / 2, 52, '#ffe060', 'center', 22);
+    text(ctx, '一夫當關　萬夫莫敵', SCREEN_W / 2, 80, '#ffffff', 'center', 9);
+  } else if (code === B.cleared) {
+    text(ctx, '關口守住了', SCREEN_W / 2, 56, '#ffe060', 'center', 20);
+    text(ctx, '五十名精英，無人能過', SCREEN_W / 2, 82, '#ffffff', 'center', 9);
+  } else {
+    text(ctx, '叛徒出現！', SCREEN_W / 2, 54, '#d8a0ff', 'center', 18);
+    text(ctx, '小心背後', SCREEN_W / 2, 78, '#ffffff', 'center', 9);
   }
   ctx.restore();
 }
@@ -1020,6 +1251,15 @@ function drawHud(ctx: CanvasRenderingContext2D, snap: Snapshot, o: DrawOpts) {
       text(ctx, `${wd.name}${wd.uses < UNLIMITED ? ` ${f.n}` : ''}${pair}${state}`, x, 35, jammed ? '#ff6a4a' : hot ? '#ffb070' : '#bfe8ff');
     }
   });
+
+  if (snap.sg === 1 && snap.ph >= 1) {
+    text(ctx, `溫泉關　擊倒 ${Math.min(snap.kl, ONSEN.total)} / ${ONSEN.total}`, SCREEN_W / 2, 3, '#ffe060', 'center');
+    const traitor = snap.f.find((f) => f.b & 64 && f.s !== St.Dead);
+    if (traitor) {
+      text(ctx, '叛徒', SCREEN_W / 2 - 58, 12, '#d8a0ff', 'left', 7);
+      bar(ctx, SCREEN_W / 2 - 40, 14, 80, traitor.h, traitor.m);
+    }
+  }
 
   const boss = snap.f.find((f) => DEFS[f.d]?.kind === 'boss' && f.s !== St.Dead);
   if (boss) {

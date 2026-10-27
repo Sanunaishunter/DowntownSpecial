@@ -106,8 +106,8 @@ async function main() {
     }
   };
 
-  // Practice parameter for single-player: /?weapon=1..5 starts armed.
-  const practice = { weapon: Number(q.get('weapon')) || 0 };
+  // Practice parameters for single-player: /?weapon=1..7 starts armed, /?stage=onsen starts at 溫泉關.
+  const practice = { weapon: Number(q.get('weapon')) || 0, stage: q.get('stage') === 'onsen' ? 1 : 0 };
   $('btn-local').onclick = () => start(new LocalSession(input, practice));
   $('btn-create').onclick = () => void connect('create');
   const join = () => {

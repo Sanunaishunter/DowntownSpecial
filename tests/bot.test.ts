@@ -31,7 +31,7 @@ function simulate(players: number, seed: number) {
   const w = createWorld(seed);
   for (let i = 0; i < players; i++) addPlayer(w, i);
   let n = 0;
-  while (n < 60 * 60 * 6 && w.status === 0 && w.lap === 0) {
+  while (n < 60 * 60 * 6 && w.status === 0 && w.lap === 0 && w.stage === 0) {
     const inputs = [0, 1].slice(0, players).map((slot) => {
       const me = w.fighters.find((f) => f.kind === 'player' && f.slot === slot)!;
       return botInput(w, me, n);
@@ -39,14 +39,14 @@ function simulate(players: number, seed: number) {
     step(w, inputs);
     n++;
   }
-  return { lap: w.lap, status: w.status, seconds: Math.round(n / 60), wave: w.wave, lives: w.slots.map((s) => s.lives), score: w.slots.map((s) => s.score) };
+  return { lap: w.lap, stage: w.stage, status: w.status, seconds: Math.round(n / 60), wave: w.wave, lives: w.slots.map((s) => s.lives), score: w.slots.map((s) => s.score) };
 }
 
 describe('bot playthrough (balance sanity)', () => {
-  it('two simple bots can finish a lap', () => {
+  it('two simple bots can beat the general and reach 溫泉關', () => {
     const results = [1, 2, 3, 4, 5].map((seed) => simulate(2, seed));
     console.log('2P bots:', JSON.stringify(results));
-    expect(results.filter((r) => r.lap >= 1).length).toBeGreaterThanOrEqual(3);
+    expect(results.filter((r) => r.lap >= 1 || r.stage === 1).length).toBeGreaterThanOrEqual(3);
   });
 
   it('a lone bot makes real progress', () => {

@@ -53,6 +53,7 @@ interface Loaded {
 export class Assets {
   private sheets = new Map<string, Loaded>();
   private layers: { def: BackdropLayer; img: HTMLImageElement }[] = [];
+  private onsen: HTMLImageElement | null = null;
 
   async load() {
     try {
@@ -74,6 +75,17 @@ export class Assets {
         }),
       );
       if (backdrop) await this.loadBackdrop(backdrop);
+      const onsen = (manifest as unknown as Record<string, { image?: string } | undefined>)._onsen;
+      if (onsen && typeof onsen.image === 'string') {
+        const img = new Image();
+        img.src = `/assets/${onsen.image}`;
+        try {
+          await img.decode();
+          this.onsen = img;
+        } catch {
+          /* the plain fallback is drawn */
+        }
+      }
     } catch {
       /* no custom art: placeholders are used */
     }
@@ -108,6 +120,14 @@ export class Assets {
         ctx.drawImage(img, -Math.round(cam * def.parallax), y);
       }
     }
+    return true;
+  }
+
+  /** The one-screen picture of 溫泉關; false when it is not there. */
+  drawOnsen(ctx: CanvasRenderingContext2D): boolean {
+    if (!this.onsen) return false;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(this.onsen, 0, 0);
     return true;
   }
 
