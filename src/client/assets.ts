@@ -53,7 +53,8 @@ interface Loaded {
 export class Assets {
   private sheets = new Map<string, Loaded>();
   private layers: { def: BackdropLayer; img: HTMLImageElement }[] = [];
-  private onsen: HTMLImageElement | null = null;
+  private scenes = new Map<string, HTMLImageElement>();
+  private signs = new Map<string, { x: number; y: number; w: number; h: number }>();
   private icons = new Map<string, HTMLImageElement>();
 
   async load() {
@@ -92,13 +93,16 @@ export class Assets {
           }),
         );
       }
-      const onsen = (manifest as unknown as Record<string, { image?: string } | undefined>)._onsen;
-      if (onsen && typeof onsen.image === 'string') {
+      // the one-screen pictures of 溫泉關 and the street; the street's may say where its blank signboard hangs
+      for (const [key, name] of [['_onsen', 'onsen'], ['_street', 'street']] as const) {
+        const scene = (manifest as unknown as Record<string, { image?: string; sign?: { x: number; y: number; w: number; h: number } } | undefined>)[key];
+        if (!scene || typeof scene.image !== 'string') continue;
         const img = new Image();
-        img.src = `/assets/${onsen.image}`;
+        img.src = `/assets/${scene.image}`;
         try {
           await img.decode();
-          this.onsen = img;
+          this.scenes.set(name, img);
+          if (scene.sign) this.signs.set(name, scene.sign);
         } catch {
           /* the plain fallback is drawn */
         }
@@ -143,9 +147,9 @@ export class Assets {
     return this.icons.get(String(name));
   }
 
-  /** The one-screen picture of 溫泉關; false when it is not there. */
-  drawOnsen(ctx: CanvasRenderingContext2D, width: number): boolean {
-    const img = this.onsen;
+  /** The one-screen picture of a stage ('onsen', 'street'); false when it is not there. */
+  drawScene(ctx: CanvasRenderingContext2D, name: string, width: number): boolean {
+    const img = this.scenes.get(name);
     if (!img) return false;
     ctx.imageSmoothingEnabled = false;
     // the picture is 256 wide: on a wider screen it sits in the middle and is mirrored out to both sides
@@ -161,6 +165,11 @@ export class Assets {
       }
     }
     return true;
+  }
+
+  /** Where the blank signboard is on a scene picture (256-wide coordinates), when the picture has one to be written on. */
+  sign(name: string) {
+    return this.signs.get(name);
   }
 
   get count() {

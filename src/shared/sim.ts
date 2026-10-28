@@ -3,8 +3,9 @@ import { DEFS, PLAYER_DEFS } from './defs';
 import { AURA, BARRAGE, BEAM, ENEMY_HALO, HALO, MP_MAX, SHIELD, SP, SPECIALS, TATSU, THUNDER, VOLLEY } from './specials';
 import { STAGE, type WaveDef } from './stage';
 import { St, type Fighter, type PlayerInput, type Shot, type Snapshot, type World } from './types';
-import { CHARGE, COMBO, CRIT, CRY, EV_AWAKEN, EV_CRIT, EV_DAMAGE, EV_RAIN, EV_ZAP } from './feel';
+import { CHARGE, COMBO, CRIT, CRY, EV_AWAKEN, EV_CRIT, EV_DAMAGE, EV_RAIN, EV_UP, EV_ZAP } from './feel';
 import { ONSEN, STAGE_ONSEN, STAGE_TOKAIDO } from './onsen';
+import { STAGE_STREET, STREET } from './street';
 import { BLADES, BOW, BULLET, NAGINATA, RAIKIRI, RAIN, SPEAR, STAFF, GATLING, ITEM_1UP, ITEM_TONIC, SHURIKEN, TWIN, UNLIMITED, WEAPONS, WID, type AtkDef } from './weapons';
 
 const PEND_WINDOW = 3;
@@ -252,7 +253,7 @@ export function step(w: World, inputs: Array<PlayerInput | undefined>) {
   w.stageT++;
   for (const f of w.fighters) {
     if (f.heldBy) continue;
-    if (isPlayer(f)) updatePlayer(w, f, w.stage === STAGE_ONSEN && w.phase === 0 ? undefined : inputs[f.slot]);
+    if (isPlayer(f)) updatePlayer(w, f, w.phase === 0 && w.stage !== STAGE_TOKAIDO ? sceneInput(w, f) : inputs[f.slot]);
     else updateEnemy(w, f);
   }
   for (const f of w.fighters) if (f.heldBy) placeHeld(w, f);
@@ -264,6 +265,17 @@ export function step(w: World, inputs: Array<PlayerInput | undefined>) {
   updateShots(w);
   w.fighters = w.fighters.filter((f) => !(!isPlayer(f) && f.st === St.Dead && f.t >= 40));
   updateStage(w);
+}
+
+/** In the opening scenes the heroes cannot be steered; in the street they walk up to the shop owner by themselves. */
+function sceneInput(w: World, f: Fighter): PlayerInput | undefined {
+  if (w.stage !== STAGE_STREET || w.phaseT < STREET.intro.start || f.x >= streetStop(w, f)) return undefined;
+  return { held: Btn.Right, pressed: 0 };
+}
+
+/** Where a hero stops in front of the shop owner. */
+function streetStop(w: World, f: Fighter) {
+  return STREET.owner.x - STREET.stopGap - f.slot * STREET.stopStep + (w.viewW - SCREEN_W) / 2;
 }
 
 // ---------- player ----------
@@ -1004,7 +1016,7 @@ function die(w: World, f: Fighter) {
     f.spOn = 0;
   } else {
     if (f.lastSlot >= 0 && w.slots[f.lastSlot]) w.slots[f.lastSlot].score += DEFS[f.def].score;
-    if (w.stage === STAGE_ONSEN && !f.script) w.kills++;
+    if (w.stage !== STAGE_TOKAIDO && !f.script) w.kills++;
     dropOnDeath(w, f);
   }
 }
@@ -1669,6 +1681,7 @@ function updateStage(w: World) {
 
   if (w.status === 0) {
     if (w.stage === STAGE_ONSEN) updateOnsen(w);
+    else if (w.stage === STAGE_STREET) updateStreet(w);
     else {
       if (!w.locked && w.wave < waves.length && w.stageT >= 60 && w.cam >= waveAt(w, w.wave) - 0.5) {
         spawnWave(w, waves[w.wave]);
@@ -1752,7 +1765,26 @@ export function enterOnsen(w: World) {
   for (const f of w.fighters) if (isPlayer(f)) f.x = 64 - f.slot * 26 + (w.viewW - SCREEN_W) / 2;
 }
 
-/** The pass is held: the Tokaido starts again, one lap tougher. */
+/** The pass is held: on to the mountain street. The heroes start on the left and walk up to the shop by themselves. */
+export function enterStreet(w: World) {
+  w.stage = STAGE_STREET;
+  w.phase = 0;
+  w.phaseT = 0;
+  w.kills = 0;
+  w.spawned = 0;
+  w.traitor = 0;
+  w.banner = null;
+  w.cam = 0;
+  w.camMax = 0;
+  w.locked = true;
+  w.stageT = 0;
+  w.lapT = 0;
+  sweepFloor(w);
+  resetHeroes(w, 1);
+  for (const f of w.fighters) if (isPlayer(f)) f.x = 24 + f.slot * 16 + (w.viewW - SCREEN_W) / 2;
+}
+
+/** The street is saved: the Tokaido starts again, one lap tougher. */
 function nextLap(w: World) {
   w.stage = STAGE_TOKAIDO;
   w.phase = 0;
@@ -1779,7 +1811,7 @@ function updateOnsen(w: World) {
   w.phaseT++;
   if (w.phase === 0) runIntro(w);
   else if (w.phase === 1) runFight(w);
-  else if (w.phaseT >= ONSEN.clearDelay) nextLap(w);
+  else if (w.phaseT >= ONSEN.clearDelay) enterStreet(w);
 }
 
 /**
@@ -1894,6 +1926,82 @@ function pickUpWalkOvers(w: World) {
     w.ev.push([it.x, it.y, 14, 1]);
   }
   w.items = w.items.filter((it) => it.kind !== 0);
+}
+
+// ---------- 健康素食保衛戰 ----------
+
+function updateStreet(w: World) {
+  w.phaseT++;
+  if (w.phase === 0) runStreetIntro(w);
+  else if (w.phase === 1) runStreetFight(w);
+  else if (w.phaseT >= STREET.clearDelay) nextLap(w);
+}
+
+/**
+ * The opening scene: the heroes walk up to the owner (see sceneInput), he says his piece and gives them a black banana (the
+ * client draws the words and the banana from the timeline in STREET.intro), and when they have eaten it every player has one more
+ * life. Then the bandits come.
+ */
+function runStreetIntro(w: World) {
+  const I = STREET.intro;
+  if (w.phaseT === I.eat) {
+    for (const s of w.slots) if (s.a) s.lives = Math.min(MAX_LIVES, s.lives + 1);
+    for (const f of w.fighters) if (isPlayer(f) && f.st !== St.Dead) w.ev.push([f.x, f.y, f.z + 24, EV_UP]);
+    setBanner(w, STREET.banner.power, STREET.banner.powerT);
+  }
+  if (w.phaseT >= I.end) {
+    w.phase = 1;
+    w.phaseT = 0;
+    setBanner(w, STREET.banner.title, STREET.banner.titleT);
+    for (const f of w.fighters) if (isPlayer(f)) f.inv = Math.max(f.inv, 30);
+  }
+}
+
+/** Bandits keep coming until a hundred have been let in; the chief walks in once `bossAt` have fallen. The street is held when everyone is down. */
+function runStreetFight(w: World) {
+  const foes = w.fighters.filter((f) => !isPlayer(f) && f.st !== St.Dead);
+  const players = w.fighters.filter((f) => isPlayer(f)).length;
+  if (w.phaseT === 1) {
+    // the first ones burst in from both sides at once, shouting
+    for (let k = 0; k < STREET.rush * 2; k++) spawnBandit(w, k % 2 ? 1 : -1, k === 0 ? CRY.banditCry : 0);
+  } else if (w.spawned < STREET.total && foes.length < STREET.cap + w.lap + Math.max(0, players - 1) * 2 && w.phaseT % STREET.spawnGap === 0) {
+    spawnBandit(w, rand(w) < 0.5 ? 1 : -1, rand(w) < STREET.cryChance ? CRY.banditCry : 0);
+  }
+  if (!w.traitor && w.kills >= STREET.bossAt) {
+    w.traitor = 1;
+    spawnChief(w);
+    setBanner(w, STREET.banner.chief, STREET.banner.chiefT);
+  }
+  if (w.spawned >= STREET.total && w.traitor && !foes.length) {
+    w.phase = 2;
+    w.phaseT = 0;
+    setBanner(w, STREET.banner.cleared, STREET.banner.clearedT);
+  }
+}
+
+function spawnBandit(w: World, side: 1 | -1, cry: number) {
+  const y = groundMin(w) + 4 + rand(w) * (groundMax(w) - groundMin(w) - 8);
+  const x = side > 0 ? w.cam + w.viewW + 14 + rand(w) * 30 : w.cam - 14 - rand(w) * 30;
+  const f = mkFighter(w, 'bandit', -1, x, y);
+  f.maxHp = Math.round(f.maxHp * lapMul(w));
+  f.hp = f.maxHp;
+  f.face = side > 0 ? -1 : 1;
+  f.cd = 30 + Math.floor(rand(w) * 60);
+  if (cry) shout(f, cry, 110);
+  w.spawned++;
+  w.fighters.push(f);
+}
+
+function spawnChief(w: World) {
+  const side = rand(w) < 0.5 ? 1 : -1;
+  const y = (groundMin(w) + groundMax(w)) / 2;
+  const f = mkFighter(w, 'chief', -1, side > 0 ? w.cam + w.viewW + 24 : w.cam - 24, y);
+  f.maxHp = Math.round(f.maxHp * lapMul(w));
+  f.hp = f.maxHp;
+  f.face = side > 0 ? -1 : 1;
+  f.cd = 60;
+  shout(f, CRY.chiefCry, 140);
+  w.fighters.push(f);
 }
 
 // ---------- snapshot ----------

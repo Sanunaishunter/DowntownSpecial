@@ -1,5 +1,5 @@
 import { TICK_MS } from '../shared/constants';
-import { addPlayer, createWorld, enterOnsen, snapshot, step } from '../shared/sim';
+import { addPlayer, createWorld, enterOnsen, enterStreet, snapshot, step } from '../shared/sim';
 import type { GameEvent, Snapshot, World } from '../shared/types';
 import { WEAPONS } from '../shared/weapons';
 import type { Input } from './input';
@@ -33,6 +33,7 @@ export class LocalSession implements Session {
       me.wn = wd.uses;
     }
     if (practice.stage === 1) enterOnsen(this.world);
+    else if (practice.stage === 2) enterStreet(this.world);
     this.snap = snapshot(this.world);
   }
 

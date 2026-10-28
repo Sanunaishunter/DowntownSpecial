@@ -120,8 +120,8 @@ async function main() {
     }
   };
 
-  // Practice parameters for single-player: /?weapon=1..7 starts armed, /?stage=onsen starts at 溫泉關.
-  const practice = { weapon: Number(q.get('weapon')) || 0, stage: q.get('stage') === 'onsen' ? 1 : 0, viewW: SCREEN_W };
+  // Practice parameters for single-player: /?weapon=1..7 starts armed, /?stage=onsen starts at 溫泉關, /?stage=street at 健康素食保衛戰.
+  const practice = { weapon: Number(q.get('weapon')) || 0, stage: q.get('stage') === 'onsen' ? 1 : q.get('stage') === 'street' ? 2 : 0, viewW: SCREEN_W };
   // /?wide: the picture fills the window and the controls float over it; the battlefield is as wide as the window is
   // (single-player only for now, as every player in a room has to see the same battlefield)
   const wide = q.has('wide');
@@ -190,10 +190,10 @@ async function main() {
       }
     }
     sfx.scan(snap, now);
-    // the tune follows the scene: the shogun's fight, 溫泉關, the road, and the menu while nobody is playing
+    // the tune follows the scene: the shogun's or the chief's fight, 溫泉關, the street, the road, and the menu while nobody is playing
     if (!snap) music.play(['menu', 'tokaido']);
-    else if (snap.f.some((f) => f.d === 'shogun' && f.h > 0)) music.play(['shogun', 'tokaido']);
-    else music.play(snap.sg === 1 ? ['onsen', 'tokaido'] : ['tokaido']);
+    else if (snap.f.some((f) => (f.d === 'shogun' || f.d === 'chief') && f.h > 0)) music.play(['shogun', 'tokaido']);
+    else music.play(snap.sg === 1 ? ['onsen', 'tokaido'] : snap.sg === 2 ? ['street', 'tokaido'] : ['tokaido']);
     renderer.draw(snap, { mySlot: session?.mySlot() ?? 0, hint, now });
     requestAnimationFrame(frame);
   };

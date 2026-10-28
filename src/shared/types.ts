@@ -190,12 +190,12 @@ export interface World {
   lap: number;
   /** ticks since the last wave of the lap was cleared */
   lapT: number;
-  /** which stage is on: 0 the Tokaido, 1 溫泉關 */
-  stage: 0 | 1;
-  /** 溫泉關: 0 opening scene, 1 fighting, 2 held */
+  /** which stage is on: 0 the Tokaido, 1 溫泉關, 2 健康素食保衛戰 */
+  stage: 0 | 1 | 2;
+  /** 溫泉關 and 健康素食保衛戰: 0 opening scene, 1 fighting, 2 held */
   phase: 0 | 1 | 2;
   phaseT: number;
-  /** 溫泉關: enemies defeated, elites let in so far, and whether the traitor has shown up */
+  /** 溫泉關 and 健康素食保衛戰: enemies defeated, how many have been let in so far, and whether the traitor / the bandit chief has shown up */
   kills: number;
   spawned: number;
   traitor: number;
@@ -283,7 +283,7 @@ export interface Snapshot {
   /** laps finished */
   lp: number;
   /** stage, 溫泉關 phase, ticks in the phase, enemies defeated there, and the banner [code, ticks left] or [] */
-  sg: 0 | 1;
+  sg: 0 | 1 | 2;
   ph: number;
   pt: number;
   kl: number;

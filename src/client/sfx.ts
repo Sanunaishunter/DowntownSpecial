@@ -2,7 +2,7 @@
 // the events the simulation sends (a hit, a crit, a bolt, 萬箭齊發) and the fighters' own states (a punch begins, the bow is drawn).
 import { BEAM } from '../shared/specials';
 import { BOW } from '../shared/weapons';
-import { EV_AWAKEN, EV_CRIT, EV_RAIN, EV_ZAP } from '../shared/feel';
+import { EV_AWAKEN, EV_CRIT, EV_RAIN, EV_UP, EV_ZAP } from '../shared/feel';
 import { St, type GameEvent, type Snapshot } from '../shared/types';
 
 type Wave = OscillatorType;
@@ -89,6 +89,7 @@ export class Sfx {
       const j = 0.9 + Math.random() * 0.2;
       if (k === EV_RAIN) this.rain(c);
       else if (k === EV_AWAKEN) this.awaken(c);
+      else if (k === EV_UP) this.oneUp(c);
       else if (k === EV_ZAP) this.zap(c);
       else if (k === 4) this.thunder(c);
       else if (k === 5) this.hiss(c, 'lowpass', 1400, 250, 0.5, 0.6);
@@ -189,6 +190,12 @@ export class Sfx {
     for (const [i, f] of [220, 330, 440, 660].entries()) this.tone(c, f * 0.8, f * 1.5, 1.1, 0.16, 'triangle', i * 0.06);
     this.tone(c, 90, 30, 0.8, 0.9);
     this.hiss(c, 'bandpass', 400, 4000, 1.0, 0.4, 0.7);
+  }
+
+  /** The banana's 1UP: a bright run of notes going up, with a soft chime on the end. */
+  private oneUp(c: AudioContext) {
+    for (const [i, f] of [660, 784, 988, 1319, 1568].entries()) this.tone(c, f, f, 0.16, 0.22, 'square', i * 0.07);
+    this.tone(c, 2637, 2637, 0.5, 0.12, 'sine', 0.36);
   }
 
   /** 萬箭齊發: a gong, a drum and a second of arrows rushing out. */

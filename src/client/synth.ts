@@ -52,6 +52,17 @@ export const TUNES: Record<string, Tune> = {
       { voice: 'taiko', vol: 0.8, bars: ['D...d...D...d...', 'D...d...D.k.D.k.'] },
     ],
   },
+  // 健康素食保衛戰: a bouncy street tune, plucked shamisen over a light koto and a tapping drum
+  street: {
+    bpm: 132,
+    length: 4,
+    parts: [
+      { voice: 'shamisen', vol: 0.5, bars: ['0.2.3.2.0.2.3.5.', '3.5.7.5.3.2.3.2.', '0.2.3.2.0.2.3.5.', '7.5.3.2.0...0...'] },
+      { voice: 'koto', vol: 0.3, bars: ['..0...2...3...2.', '..2...3...5...3.', '..0...2...3...2.', '..3...2...0...0.'] },
+      { voice: 'bass', vol: 0.5, bars: ['0...0.0.0...2.0.', '0...0.0.3...2.0.'] },
+      { voice: 'taiko', vol: 0.7, bars: ['D.k.d.k.D.k.d.kk', 'D.k.d.k.D.d.k.kk'] },
+    ],
+  },
   // 主選單: quiet koto
   menu: {
     bpm: 76,

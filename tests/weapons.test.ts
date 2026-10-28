@@ -1,13 +1,14 @@
-import { CHARGE, COMBO, CRIT, CRY, CRY_TEXT, EV_CRIT, EV_DAMAGE, EV_RAIN, EV_ZAP } from '../src/shared/feel';
+import { CHARGE, COMBO, CRIT, CRY, CRY_TEXT, EV_CRIT, EV_DAMAGE, EV_RAIN, EV_UP, EV_ZAP } from '../src/shared/feel';
 import { describe, expect, it } from 'vitest';
 import { Btn } from '../src/shared/constants';
-import { addPlayer, createWorld, enterOnsen, hit, snapshot, step } from '../src/shared/sim';
+import { addPlayer, createWorld, enterOnsen, enterStreet, hit, snapshot, step } from '../src/shared/sim';
 import { AURA, BARRAGE, BEAM, ENEMY_HALO, HALO, MP_MAX, SHIELD, SP, SPECIALS, TATSU, THUNDER, VOLLEY } from '../src/shared/specials';
 import { St, type Fighter, type GameEvent, type PlayerInput, type World } from '../src/shared/types';
-import { BOW, GATLING, ITEM_1UP, ITEM_TONIC, NAGINATA, RAIKIRI, RAIN, SPEAR, STAFF, TWIN, WEAPONS, WID } from '../src/shared/weapons';
+import { BOW, GATLING, ITEM_1UP, ITEM_TONIC, NAGINATA, RAIKIRI, RAIN, SPEAR, STAFF, TWIN, UNLIMITED, WEAPONS, WID } from '../src/shared/weapons';
 import { DEFS } from '../src/shared/defs';
 import { STAGE } from '../src/shared/stage';
 import { ONSEN, STAGE_ONSEN, STAGE_TOKAIDO } from '../src/shared/onsen';
+import { STAGE_STREET, STREET } from '../src/shared/street';
 
 // exact damage numbers in these tests: no critical hits unless a test asks for them
 CRIT.chance = 0;
@@ -614,7 +615,7 @@ function atLapEnd() {
   return { w, p };
 }
 
-// The end of the Tokaido leads into 溫泉關; this skips through it: the opening scene is over and all fifty are down.
+// The end of the Tokaido leads into 溫泉關 and then the street; this skips through both: the opening scenes are over and everyone is down.
 function throughOnsen(w: World) {
   run(w, 200);
   expect(w.stage).toBe(STAGE_ONSEN);
@@ -625,6 +626,14 @@ function throughOnsen(w: World) {
   w.traitor = 1;
   w.fighters = w.fighters.filter((f) => f.kind === 'player');
   run(w, ONSEN.clearDelay + 20);
+  expect(w.stage).toBe(STAGE_STREET);
+  w.phase = 1;
+  w.phaseT = 5;
+  w.kills = STREET.total + 1;
+  w.spawned = STREET.total;
+  w.traitor = 1;
+  w.fighters = w.fighters.filter((f) => f.kind === 'player');
+  run(w, STREET.clearDelay + 20);
 }
 
 describe('endless loop', () => {
@@ -1420,8 +1429,8 @@ describe('溫泉關', () => {
     expect(w.phase).toBe(2);
     expect(w.banner?.[0]).toBe(ONSEN.banner.cleared);
     run(w, ONSEN.clearDelay + 5);
-    expect(w.stage).toBe(STAGE_TOKAIDO);
-    expect(w.lap).toBe(1);
+    expect(w.stage).toBe(STAGE_STREET);
+    expect(w.lap).toBe(0);
   });
 
   it('kills are counted, and exactly fifty enemies come in all', () => {
@@ -1461,7 +1470,7 @@ describe('溫泉關', () => {
     w.phaseT = ONSEN.clearDelay - 2;
     w.fighters = w.fighters.filter((f) => f.kind === 'player');
     run(w, 4);
-    expect(w.stage).toBe(STAGE_TOKAIDO);
+    expect(w.stage).toBe(STAGE_STREET);
     expect(w.items.some((i) => i.kind === WID.Stick)).toBe(false);
     expect(p.weapon).toBe(WID.Saber);
   });
@@ -1475,6 +1484,176 @@ describe('溫泉關', () => {
     s = snapshot(w);
     expect([s.sg, s.ph, s.kl]).toEqual([STAGE_ONSEN, 1, 7]);
     expect(s.bn.length).toBe(2);
+  });
+});
+
+describe('健康素食保衛戰', () => {
+  const street = (seed = 11) => {
+    const w = setup(seed);
+    enterStreet(w);
+    return w;
+  };
+  const toFight = (w: World) => {
+    run(w, STREET.intro.end + 2);
+    expect(w.phase).toBe(1);
+  };
+  const foes = (w: World) => w.fighters.filter((f) => f.kind !== 'player' && f.st !== St.Dead);
+
+  it('starts on one locked screen with the walking ground of the Tokaido, and the heroes walk up to the owner by themselves', () => {
+    const w = street();
+    const p = player(w);
+    expect(w.stage).toBe(STAGE_STREET);
+    expect([w.cam, w.camMax, w.phase]).toEqual([0, 0, 0]);
+    const x0 = p.x;
+    // whatever the player presses, the scene walks the hero up to the shop and stops in front of it
+    run(w, STREET.intro.say1[0], { held: Btn.Left | Btn.Up, pressed: 0 });
+    expect(p.x).toBeGreaterThan(x0 + 100);
+    expect(p.x).toBeLessThanOrEqual(STREET.owner.x - STREET.stopGap + 2);
+    expect(p.y).toBeGreaterThan(140);
+    expect(foes(w).length).toBe(0);
+  });
+
+  it('the banana gives every player a 1UP, shows the power-up and lets the fight begin', () => {
+    const w = setup();
+    addPlayer(w, 1);
+    w.slots[0].lives = 3;
+    w.slots[1].lives = 2;
+    enterStreet(w);
+    run(w, STREET.intro.eat - 1);
+    expect(w.slots.map((s) => s.lives)).toEqual([3, 2]);
+    run(w, 1);
+    expect(w.slots.map((s) => s.lives)).toEqual([4, 3]);
+    expect(w.banner?.[0]).toBe(STREET.banner.power);
+    expect(snapshot(w).ev.filter((e) => e[3] === EV_UP).length).toBe(2);
+    // once only
+    run(w, 200);
+    expect(w.slots.map((s) => s.lives)).toEqual([4, 3]);
+    expect(w.phase).toBe(1);
+    expect(w.banner?.[0]).toBe(STREET.banner.title);
+  });
+
+  it('lives are capped at nine', () => {
+    const w = street();
+    w.slots[0].lives = 9;
+    run(w, STREET.intro.eat + 1);
+    expect(w.slots[0].lives).toBe(9);
+  });
+
+  it('bandits rush in from both sides at the start, one of them shouting the war cry', () => {
+    const w = street();
+    toFight(w);
+    run(w, 2);
+    const fs = foes(w);
+    expect(fs.length).toBe(STREET.rush * 2);
+    expect(fs.every((f) => f.def === 'bandit')).toBe(true);
+    expect(fs.some((f) => f.x < 60)).toBe(true);
+    expect(fs.some((f) => f.x > 200)).toBe(true);
+    const s = snapshot(w);
+    expect(s.f.some((f) => f.cr === CRY.banditCry)).toBe(true);
+    expect(CRY_TEXT[CRY.banditCry]).toBe('蒼天已死，黃天當立！');
+  });
+
+  it('a hundred bandits come in all, then the chief once ninety have fallen, and the street is held when all are down', () => {
+    const w = street(5);
+    toFight(w);
+    const p = player(w);
+    p.hp = p.maxHp = 9999999;
+    const seen = new Set<string>();
+    const bandits = new Set<number>();
+    for (let i = 0; i < 60 * 60 * 8 && w.phase === 1; i++) {
+      for (const f of w.fighters) {
+        if (f.kind === 'player') continue;
+        seen.add(f.def);
+        if (f.def === 'bandit') bandits.add(f.id);
+        if (f.st !== St.Dead && f.st !== St.Down) hit(w, f, 0, 9999, 1, true, 2, 1);
+      }
+      // the cap keeps the screen from filling up
+      expect(foes(w).length).toBeLessThanOrEqual(STREET.cap + 2);
+      step(w, [none, undefined]);
+    }
+    expect(w.phase).toBe(2);
+    expect(bandits.size).toBe(STREET.total);
+    expect(seen.has('chief')).toBe(true);
+    expect(w.kills).toBe(STREET.total + 1);
+    expect(w.banner?.[0]).toBe(STREET.banner.cleared);
+    run(w, STREET.clearDelay + 5);
+    expect(w.stage).toBe(STAGE_TOKAIDO);
+    expect(w.lap).toBe(1);
+  });
+
+  it('the chief is a boss who comes in with a shout and a banner, only once', () => {
+    const w = street();
+    toFight(w);
+    const p = player(w);
+    p.hp = p.maxHp = 9999999;
+    w.spawned = 50;
+    w.kills = STREET.bossAt - 1;
+    run(w, 3);
+    expect(w.fighters.some((f) => f.def === 'chief')).toBe(false);
+    w.kills = STREET.bossAt;
+    run(w, 2);
+    const chiefs = w.fighters.filter((f) => f.def === 'chief');
+    expect(chiefs.length).toBe(1);
+    expect(chiefs[0].kind).toBe('boss');
+    expect(chiefs[0].maxHp).toBe(DEFS.chief.hp);
+    expect(w.banner?.[0]).toBe(STREET.banner.chief);
+    expect(snapshot(w).f.find((f) => f.i === chiefs[0].id)!.cr).toBe(CRY.chiefCry);
+    run(w, 600);
+    expect(w.fighters.filter((f) => f.def === 'chief').length).toBe(1);
+    // he leaves a 1UP when he falls
+    chiefs[0].hp = 1;
+    hit(w, chiefs[0], 0, 50, 1, true, 2, 1);
+    run(w, 90);
+    expect(w.items.some((i) => i.kind === ITEM_1UP)).toBe(true);
+  });
+
+  it('one more bandit at a time each lap and a second player, and they get tougher', () => {
+    const count = (lap: number, players: number) => {
+      const w = setup(3);
+      if (players > 1) addPlayer(w, 1);
+      w.lap = lap;
+      enterStreet(w);
+      toFight(w);
+      for (const f of w.fighters) if (f.kind === 'player') f.hp = f.maxHp = 9999999;
+      // keep them from reaching the heroes so nobody dies: kill none, just watch the cap
+      run(w, 60 * 12);
+      return w;
+    };
+    const a = count(0, 1);
+    const b = count(3, 1);
+    const c = count(0, 2);
+    expect(foes(a).length).toBeLessThanOrEqual(STREET.cap);
+    expect(foes(b).length).toBeLessThanOrEqual(STREET.cap + 3);
+    expect(foes(c).length).toBeLessThanOrEqual(STREET.cap + 2);
+    expect(foes(b).every((f) => f.maxHp === Math.round(DEFS.bandit.hp * 1.3))).toBe(true);
+  });
+
+  it('weapons on the floor are swept away, what the heroes hold comes along, and the snapshot tells the stage', () => {
+    const w = setup();
+    const p = player(w);
+    p.weapon = WID.Spear;
+    p.wn = UNLIMITED;
+    w.items.push({ id: w.nextId++, kind: WID.Rifle, x: p.x + 30, y: p.y, z: 0, vx: 0, vy: 0, vz: 0, owner: 0, n: 9 });
+    enterStreet(w);
+    expect(w.items.length).toBe(0);
+    expect(p.weapon).toBe(WID.Spear);
+    let s = snapshot(w);
+    expect([s.sg, s.ph]).toEqual([STAGE_STREET, 0]);
+    toFight(w);
+    w.kills = 7;
+    s = snapshot(w);
+    expect([s.sg, s.ph, s.kl]).toEqual([STAGE_STREET, 1, 7]);
+  });
+
+  it('the street follows 溫泉關 in the loop', () => {
+    const w = setup();
+    enterOnsen(w);
+    w.phase = 2;
+    w.phaseT = ONSEN.clearDelay - 2;
+    run(w, 4);
+    expect(w.stage).toBe(STAGE_STREET);
+    expect(w.phase).toBe(0);
+    expect(w.lap).toBe(0);
   });
 });
 

@@ -3014,5 +3014,293 @@
       "w": 58,
       "h": 13
     }
+  },
+  "bandit": {
+    "image": "gen/bandit.png",
+    "w": 64,
+    "h": 56,
+    "ox": 28,
+    "oy": 52,
+    "anims": {
+      "idle": {
+        "frames": [
+          0
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk": {
+        "frames": [
+          1,
+          0,
+          2,
+          0
+        ],
+        "ticks": [
+          9,
+          6,
+          9,
+          6
+        ],
+        "loop": true
+      },
+      "run": {
+        "frames": [
+          3
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "dash": {
+        "frames": [
+          3
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "punch": {
+        "frames": [
+          4,
+          5,
+          6,
+          6
+        ],
+        "ticks": [
+          3,
+          3,
+          4,
+          2
+        ]
+      },
+      "kick": {
+        "frames": [
+          7,
+          4,
+          5,
+          6
+        ],
+        "ticks": [
+          5,
+          4,
+          5,
+          6
+        ]
+      },
+      "hurt": {
+        "frames": [
+          8
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "fly": {
+        "frames": [
+          9
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "down": {
+        "frames": [
+          10
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "dead": {
+        "frames": [
+          10
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "held": {
+        "frames": [
+          10
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "getup": {
+        "frames": [
+          11
+        ],
+        "ticks": [
+          60
+        ]
+      }
+    }
+  },
+  "chief": {
+    "image": "gen/chief.png",
+    "w": 88,
+    "h": 72,
+    "ox": 40,
+    "oy": 68,
+    "anims": {
+      "idle": {
+        "frames": [
+          0
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "walk": {
+        "frames": [
+          1,
+          0,
+          2,
+          0
+        ],
+        "ticks": [
+          10,
+          6,
+          10,
+          6
+        ],
+        "loop": true
+      },
+      "run": {
+        "frames": [
+          3
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "dash": {
+        "frames": [
+          3
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "punch": {
+        "frames": [
+          4,
+          5,
+          6,
+          6
+        ],
+        "ticks": [
+          4,
+          4,
+          4,
+          2
+        ]
+      },
+      "kick": {
+        "frames": [
+          7,
+          4,
+          5,
+          6
+        ],
+        "ticks": [
+          5,
+          4,
+          5,
+          6
+        ]
+      },
+      "hurt": {
+        "frames": [
+          8
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "fly": {
+        "frames": [
+          9
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "down": {
+        "frames": [
+          10
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "dead": {
+        "frames": [
+          10
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "held": {
+        "frames": [
+          10
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "getup": {
+        "frames": [
+          11
+        ],
+        "ticks": [
+          60
+        ]
+      }
+    }
+  },
+  "owner": {
+    "image": "gen/owner.png",
+    "w": 48,
+    "h": 48,
+    "ox": 22,
+    "oy": 44,
+    "anims": {
+      "idle": {
+        "frames": [
+          0
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "talk": {
+        "frames": [
+          0
+        ],
+        "ticks": [
+          60
+        ]
+      },
+      "offer": {
+        "frames": [
+          0
+        ],
+        "ticks": [
+          60
+        ]
+      }
+    }
+  },
+  "_street": {
+    "image": "gen/bg_street.png",
+    "w": 256,
+    "h": 224,
+    "groundMin": 140,
+    "groundMax": 208
   }
 }

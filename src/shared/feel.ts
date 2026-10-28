@@ -5,7 +5,7 @@ export const CRIT = { chance: 0.1, mult: 2 };
 export const COMBO = { keep: 80 };
 
 /** The hero shouts the name of a special move for `dur` ticks, in a speech bubble. Codes: 1-4 moves, 10 + id for the six specials. */
-export const CRY = { dur: 75, barrage: 1, tatsu: 2, whirl: 3, upper: 4, special: 10, traitor: 20, traitorDur: 130, charge: 30, awaken: 31, staff: 40, thrust: 41, spear: 42 };
+export const CRY = { dur: 75, barrage: 1, tatsu: 2, whirl: 3, upper: 4, special: 10, traitor: 20, traitorDur: 130, charge: 30, awaken: 31, staff: 40, thrust: 41, spear: 42, banditCry: 50, chiefCry: 51 };
 
 export const CRY_TEXT: Record<number, string> = {
   [CRY.barrage]: '百裂拳！',
@@ -24,6 +24,8 @@ export const CRY_TEXT: Record<number, string> = {
   [CRY.staff]: '鬼火旋舞！',
   [CRY.thrust]: '誰說沒槍頭就捅不死！',
   [CRY.spear]: '沒槍頭照樣捅死你！',
+  [CRY.banditCry]: '蒼天已死，黃天當立！',
+  [CRY.chiefCry]: '黃天當立！殺光他們！',
 };
 
 /** Event kinds for the damage numbers: the 5th element of the event is the damage. */
@@ -39,5 +41,7 @@ export const CHARGE = { start: 180, full: 600, goldDur: 1800 };
 export const EV_AWAKEN = 8;
 /** Event kind for 奧義 萬箭齊發: the whole picture shakes and the name of the move is written across the middle. */
 export const EV_RAIN = 10;
+/** Event kind for the 1UP the banana gives: a green "1UP" floats up over the hero. */
+export const EV_UP = 11;
 /** Event kind for a small lightning that jumps to an enemy (雷切). */
 export const EV_ZAP = 9;

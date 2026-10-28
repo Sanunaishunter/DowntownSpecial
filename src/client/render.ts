@@ -1,6 +1,7 @@
 import { SCREEN_H, SCREEN_W, STAGE_W } from '../shared/constants';
 import { ONSEN } from '../shared/onsen';
-import { CRY_TEXT, EV_AWAKEN, EV_CRIT, EV_DAMAGE, EV_RAIN, EV_ZAP } from '../shared/feel';
+import { STREET } from '../shared/street';
+import { CRY_TEXT, EV_AWAKEN, EV_CRIT, EV_DAMAGE, EV_RAIN, EV_UP, EV_ZAP } from '../shared/feel';
 import { DEFS } from '../shared/defs';
 import { BEAM, HALO, MP_MAX, SPECIALS } from '../shared/specials';
 import { St, type GameEvent, type SnapFighter, type SnapItem, type Snapshot } from '../shared/types';
@@ -105,8 +106,11 @@ export class Renderer {
     const shy = Math.round(Math.cos(o.now * 0.13) * 2.5 * shake);
     ctx.translate(shx, shy);
     if (snap?.sg === 1) {
-      if (!this.assets.drawOnsen(ctx, VW)) drawOnsenFallback(ctx);
+      if (!this.assets.drawScene(ctx, 'onsen', VW)) drawOnsenFallback(ctx);
       drawOnsenSteam(ctx, o.now);
+    } else if (snap?.sg === 2) {
+      if (this.assets.drawScene(ctx, 'street', VW)) drawStreetSign(ctx, this.assets.sign('street'));
+      else drawStreetFallback(ctx);
     } else {
       if (!this.assets.drawBackdrop(ctx, cam, VW)) drawBackground(ctx, cam);
       tintForTime(ctx, cam);
@@ -154,29 +158,32 @@ export class Renderer {
       } else this.buffT0.delete(key);
     }
 
+    if (snap.sg === 2) this.drawOwner(snap, o.now);
     const fs = [...snap.f].sort((a, b) => a.y - b.y);
     for (const f of fs) this.drawFighter(f, cam, o.now);
     for (const f of fs) if (f.s === St.Beam) drawBeam(ctx, f, cam, o.now);
     for (const s of snap.sh) drawShot(ctx, s, cam, o.now, this.assets);
 
-    this.fx = this.fx.filter((e) => o.now - e.t0 < (e.k === 4 ? 280 : e.k === 5 ? 800 : e.k === EV_DAMAGE ? 650 : e.k === EV_CRIT ? 950 : e.k === EV_ZAP ? 260 : e.k === EV_AWAKEN ? 800 : 200));
+    this.fx = this.fx.filter((e) => o.now - e.t0 < (e.k === 4 ? 280 : e.k === 5 ? 800 : e.k === EV_DAMAGE ? 650 : e.k === EV_CRIT ? 950 : e.k === EV_ZAP ? 260 : e.k === EV_AWAKEN ? 800 : e.k === EV_UP ? 1300 : 200));
     for (const e of this.fx) {
       if (e.k === 4) drawBolt(ctx, e, cam, (o.now - e.t0) / 280);
       else if (e.k === 5) drawSplash(ctx, e, cam, (o.now - e.t0) / 800);
       else if (e.k === EV_DAMAGE || e.k === EV_CRIT) drawDamage(ctx, e, cam, o.now - e.t0);
       else if (e.k === EV_ZAP) drawZap(ctx, e, cam, (o.now - e.t0) / 260);
       else if (e.k === EV_AWAKEN) drawAwaken(ctx, e, cam, (o.now - e.t0) / 800);
+      else if (e.k === EV_UP) drawUp(ctx, e, cam, (o.now - e.t0) / 1300);
       else drawSpark(ctx, e, cam, (o.now - e.t0) / 200);
     }
     // special moves are shouted out loud
     for (const f of snap.f) if (f.cr && CRY_TEXT[f.cr]) drawBubble(ctx, f.x - cam, f.y - Math.round(f.z) - 56, CRY_TEXT[f.cr], '#d01818');
     if (snap.sg === 1 && snap.ph === 0) drawOnsenTalk(ctx, snap);
+    if (snap.sg === 2) drawStreetTalk(ctx, snap);
 
     ctx.translate(-shx, -shy);
     drawHud(ctx, snap, o);
     this.drawCombo(snap, o.now);
     if (rainAge >= 0 && rainAge < 1900) drawRainTitle(ctx, rainAge);
-    if (snap.bn.length) drawBanner(ctx, snap.bn[0], snap.bn[1]);
+    if (snap.bn.length) drawBanner(ctx, snap.sg, snap.bn[0], snap.bn[1], o.now);
 
     // a new lap or stage: cut to black on the stage start, then fade the title and the picture back in
     if (snap.lp !== this.lap || snap.sg !== this.stg) {
@@ -189,13 +196,8 @@ export class Renderer {
       ctx.fillStyle = `rgba(0,0,0,${Math.min(1, fade * 1.6)})`;
       ctx.fillRect(0, 0, VW, SCREEN_H);
       ctx.globalAlpha = Math.min(1, fade * 2);
-      if (snap.sg === 1) {
-        text(ctx, '溫泉關', VW / 2, 88, '#ffe060', 'center', 20);
-        text(ctx, `第 ${snap.lp + 1} 周`, VW / 2, 114, '#ffffff', 'center', 12);
-      } else {
-        text(ctx, '東海道', VW / 2, 88, '#ffe060', 'center', 20);
-        text(ctx, `第 ${snap.lp + 1} 周`, VW / 2, 114, '#ffffff', 'center', 12);
-      }
+      text(ctx, ['東海道', '溫泉關', '健康素食保衛戰'][snap.sg], VW / 2, 88, '#ffe060', 'center', snap.sg === 2 ? 16 : 20);
+      text(ctx, `第 ${snap.lp + 1} 周`, VW / 2, 114, '#ffffff', 'center', 12);
       ctx.globalAlpha = 1;
     }
   }
@@ -288,6 +290,25 @@ export class Renderer {
     if (f.s === St.Barrage) drawBarrage(ctx, ox, oy - Math.round(f.z), f.r, f.t);
     if (f.w === WID.Gatling && f.ht > GATLING.overheat) drawSteam(ctx, ox + f.r * 38, oy - Math.round(f.z) - 21, now);
     if (f.b & 2) drawShield(ctx, ox + f.r * 15, oy - Math.round(f.z), shieldMs, now, !!(f.b & 8));
+  }
+
+  // 健康素食's owner: stands in front of his shop the whole stage (drawn from his own sheet when there is one).
+  private drawOwner(snap: Snapshot, now: number) {
+    const ctx = this.ctx;
+    const I = STREET.intro;
+    const t = snap.pt;
+    let pose = 'idle';
+    if (snap.ph === 0 && t >= I.say1[0] && t < I.say1[1]) pose = t >= I.say1[0] + 70 ? 'offer' : 'talk';
+    else if (snap.ph === 0 && t >= I.say1[1] && t < I.give + 30) pose = 'offer';
+    else if (snap.ph === 2 && t >= STREET.thanks[0] && t < STREET.thanks[1]) pose = 'talk';
+    const x = Math.round(STREET.owner.x + (VW - SCREEN_W) / 2);
+    const y = STREET.owner.y;
+    shadow(ctx, x, y, 0, 9);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(-1, 1);
+    if (this.assets.draw(ctx, 'owner', St.Idle, Math.floor(now / 16), 0, pose) === 0) drawOwnerFallback(ctx, pose, now);
+    ctx.restore();
   }
 
   // 金光覺醒: the hair of the golden form. The figure is drawn on a small canvas first, and the dark pixels inside the top of the
@@ -680,6 +701,197 @@ function drawOnsenTalk(ctx: CanvasRenderingContext2D, snap: Snapshot) {
   }
 }
 
+// ---------- 健康素食保衛戰 ----------
+
+// The street without its picture: a dusk sky over the hills, ume (pink) and starfruit trees, the shop, and a dirt road.
+function drawStreetFallback(ctx: CanvasRenderingContext2D) {
+  const ox = Math.floor((VW - SCREEN_W) / 2);
+  const R = (c: string, x: number, y: number, w: number, h: number) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(x, y, w, h);
+  };
+  const sky = ctx.createLinearGradient(0, 0, 0, 110);
+  sky.addColorStop(0, '#4c3c80');
+  sky.addColorStop(0.6, '#d8704c');
+  sky.addColorStop(1, '#f6b868');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, VW, 128);
+  // hills, two ranks
+  for (const [c, base, amp, ph] of [['#5a4a8c', 96, 16, 0.0], ['#3c5a4c', 108, 10, 1.7]] as const) {
+    ctx.fillStyle = c;
+    for (let x = 0; x < VW; x++) {
+      const h = Math.round(base - amp * (0.5 + 0.5 * Math.sin(x / 31 + ph)) - 6 * Math.sin(x / 11 + ph));
+      ctx.fillRect(x, h, 1, 128 - h);
+    }
+  }
+  // ume trees (pink blossom) and starfruit trees (yellow-green fruit), planted along the back of the street
+  const tree = (x: number, y: number, leaf: string, dot: string, seed: number) => {
+    R('#4a2e1a', x - 1, y - 14, 3, 14);
+    for (let k = 0; k < 26; k++) {
+      const a = k * 2.399 + seed;
+      const rx = Math.round(Math.cos(a) * (5 + (k % 5) * 2.2));
+      const ry = Math.round(Math.sin(a) * (4 + (k % 4) * 1.8));
+      R(leaf, x + rx - 2, y - 24 + ry, 5, 4);
+    }
+    for (let k = 0; k < 9; k++) {
+      const a = k * 1.7 + seed * 2;
+      R(dot, x + Math.round(Math.cos(a) * 11), y - 24 + Math.round(Math.sin(a) * 8), 2, 2);
+    }
+  };
+  tree(ox + 20, 126, '#e8a0b8', '#fff0f4', 0.3);
+  tree(ox + 58, 128, '#d88aa8', '#fff0f4', 1.9);
+  tree(ox + 104, 127, '#3c8c3c', '#f0e060', 0.8);
+  tree(ox + 254, 127, '#3c8c3c', '#f0e060', 2.6);
+  tree(8, 126, '#e8a0b8', '#fff0f4', 4.1);
+  tree(VW - 8, 126, '#3c8c3c', '#f0e060', 5.2);
+  // the shop
+  const sx = ox + 134;
+  R('#3a2a22', sx - 4, 62, 122, 8);
+  R('#4c3a30', sx - 8, 70, 130, 6);
+  R('#2a1e1a', sx - 8, 76, 130, 2);
+  R('#c8a068', sx, 78, 114, 54);
+  R('#a47c48', sx, 78, 114, 3);
+  R('#6a4a2a', sx, 128, 114, 4);
+  R('#2a1a10', sx + 52, 92, 34, 40);
+  R('#f4c868', sx + 55, 95, 28, 37);
+  R('#4aa04a', sx + 52, 92, 34, 12);
+  for (let k = 0; k < 5; k++) R('#2c6c2c', sx + 56 + k * 6, 93, 1, 11);
+  // the signboard: 健康素食
+  R('#5a3a1c', sx + 18, 70, 78, 15);
+  R('#f0e0a0', sx + 20, 72, 74, 11);
+  ctx.font = 'bold 9px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = '#1c6a2c';
+  ctx.fillText('健康素食', sx + 57, 73);
+  // lanterns and the crates of vegetables out front
+  for (const lx of [sx + 8, sx + 106]) {
+    R('#d83a2a', lx - 3, 90, 7, 9);
+    R('#f8d868', lx - 1, 92, 3, 5);
+  }
+  const veg: [string, string][] = [['#58b848', '#f8f8e8'], ['#e88a30', '#58b848'], ['#f8f0d0', '#58b848'], ['#58b848', '#d83a2a']];
+  veg.forEach(([a, b], k) => {
+    const cx = sx + 6 + k * 13;
+    R('#7a5428', cx, 120, 12, 9);
+    R(a, cx + 1, 116, 10, 5);
+    R(b, cx + 3, 114, 5, 4);
+  });
+  // the road: dirt with ruts and pebbles
+  R('#b89a64', 0, 132, VW, 92);
+  R('#a2844e', 0, 132, VW, 3);
+  for (let y = 138; y < 224; y += 9) R('#a88c58', 0, y, VW, 2);
+  for (let k = 0; k < 70; k++) R(k % 3 ? '#8c7244' : '#c8aa78', (k * 53) % VW, 140 + ((k * 37) % 80), 2, 1);
+}
+
+// Writes the shop's name on the blank signboard of the picture, when the picture says where it is.
+function drawStreetSign(ctx: CanvasRenderingContext2D, sign: { x: number; y: number; w: number; h: number } | undefined) {
+  if (!sign) return;
+  const x = Math.round(sign.x + (VW - SCREEN_W) / 2);
+  ctx.save();
+  ctx.font = `bold ${Math.max(6, Math.round(sign.h * 0.7))}px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#1c6a2c';
+  ctx.fillText('健康素食', x + sign.w / 2, sign.y + sign.h / 2 + 0.5, sign.w - 2);
+  ctx.restore();
+}
+
+// The owner, as a small figure: bald, white headband, green apron. Facing right, the caller flips him.
+function drawOwnerFallback(ctx: CanvasRenderingContext2D, pose: string, now: number) {
+  const R = (c: string, x: number, y: number, w: number, h: number) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(x, y, w, h);
+  };
+  const bob = pose === 'idle' ? Math.round(Math.sin(now / 420)) : 0;
+  ctx.translate(0, bob);
+  R('#101018', -5, -34, 11, 11);
+  R('#f0c090', -4, -33, 9, 9);
+  R('#f8f8f0', -5, -32, 11, 2);
+  R('#101018', 1, -29, 1, 2);
+  R(pose === 'talk' ? '#a03030' : '#c87060', 0, -26, 3, 1);
+  R('#101018', -6, -23, 13, 15);
+  R('#f8f8f0', -5, -23, 11, 14);
+  R('#40a040', -4, -19, 9, 11);
+  R('#2c7c2c', -4, -9, 9, 2);
+  R('#101018', -5, -8, 11, 8);
+  R('#5a4a3a', -4, -8, 9, 7);
+  R('#2a1a10', -4, -1, 4, 2);
+  R('#2a1a10', 1, -1, 4, 2);
+  // the arm: down at his side, raised while he talks, held out while he offers
+  if (pose === 'idle') R('#f0c090', 4, -18, 2, 7);
+  else if (pose === 'talk') {
+    R('#f8f8f0', 4, -23, 2, 6);
+    R('#f0c090', 5, -28, 3, 5);
+  } else {
+    R('#f8f8f0', 4, -21, 8, 3);
+    R('#f0c090', 11, -22, 3, 4);
+  }
+}
+
+// The black banana: a dark crescent with a pale rim so it shows against anything, and a brown stem.
+function drawBanana(ctx: CanvasRenderingContext2D, x: number, y: number, now: number) {
+  ctx.save();
+  ctx.translate(Math.round(x), Math.round(y));
+  ctx.rotate(-0.25 + Math.sin(now / 260) * 0.08);
+  for (let i = -6; i <= 6; i++) {
+    const dy = 4 - Math.round((i * i) / 9);
+    ctx.fillStyle = '#d8c8a0';
+    ctx.fillRect(i, dy - 2, 1, 6);
+    ctx.fillStyle = '#16101e';
+    ctx.fillRect(i, dy - 1, 1, 4);
+    ctx.fillStyle = '#4a3c64';
+    ctx.fillRect(i, dy, 1, 1);
+  }
+  ctx.fillStyle = '#7a5a20';
+  ctx.fillRect(6, -3, 2, 3);
+  ctx.fillStyle = '#d8c8a0';
+  ctx.fillRect(5, -4, 4, 1);
+  ctx.restore();
+}
+
+// The street's opening scene (the owner's words, the banana travelling to the hero and floating over his head) and his thanks.
+function drawStreetTalk(ctx: CanvasRenderingContext2D, snap: Snapshot) {
+  const I = STREET.intro;
+  const t = snap.pt;
+  const ox = STREET.owner.x + (VW - SCREEN_W) / 2;
+  const oy = STREET.owner.y;
+  const now = performance.now();
+  if (snap.ph === 2) {
+    if (t >= STREET.thanks[0] && t < STREET.thanks[1]) drawBubble(ctx, ox, oy - 40, '多謝壯士！吃素最健康！');
+    return;
+  }
+  if (snap.ph !== 0) return;
+  const hero = snap.f.filter((f) => DEFS[f.d]?.kind === 'player').sort((a, b) => a.i - b.i)[0];
+  if (t >= I.say1[0] && t < I.say1[1]) drawBubble(ctx, ox, oy - 40, '這是我珍藏多年的黑香蕉，送你吧');
+  if (hero && t >= I.say2[0] && t < I.eat) {
+    const dots = Math.min(3, 1 + Math.floor((t - I.say2[0]) / 22));
+    drawBubble(ctx, hero.x, hero.y - 54, '。'.repeat(dots));
+  }
+  if (!hero) return;
+  const fly0 = I.say1[0] + 80;
+  if (t >= fly0 && t < I.give) {
+    // from the owner's hand across to the hero
+    const k = (t - fly0) / (I.give - fly0);
+    drawBanana(ctx, ox - 12 + (hero.x + 8 - (ox - 12)) * k, oy - 22 + (hero.y - 30 - (oy - 22)) * k - Math.sin(k * Math.PI) * 12, now);
+  } else if (t >= I.give && t < I.eat) {
+    drawBanana(ctx, hero.x + 6, hero.y - 32 + Math.sin(now / 150) * 1.5, now);
+  } else if (t >= I.say1[0] && t < fly0) {
+    drawBanana(ctx, ox - 12, oy - 22, now);
+  }
+}
+
+// The 1UP the banana gives: green, it rises over the hero and fades.
+function drawUp(ctx: CanvasRenderingContext2D, e: Fx, cam: number, k: number) {
+  const x = Math.round(e.x - cam);
+  const y = Math.round(e.y - e.z - 6 - k * 26);
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, k < 0.6 ? 1 : (1 - k) / 0.4);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  outlined(ctx, '1UP', x, y, '900 12px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif', Math.floor(k * 12) % 2 ? '#ffffff' : '#7dff7d', 3);
+  ctx.restore();
+}
+
 function outlined(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, font: string, fill: string, line: number) {
   ctx.font = font;
   ctx.lineJoin = 'round';
@@ -736,19 +948,49 @@ function drawBubble(ctx: CanvasRenderingContext2D, x: number, y: number, s: stri
   ctx.fillText(s, bx + w / 2, by + 3);
 }
 
-// Big text over the fight: the stage title, the traitor, the pass held.
-function drawBanner(ctx: CanvasRenderingContext2D, code: number, ticks: number) {
-  const B = ONSEN.banner;
-  const total = code === B.title ? B.titleT : code === B.cleared ? B.clearedT : B.traitorT;
+// Big text over the fight: the stage title, the traitor, the pass held; in the street the chief, the street held, and the banana's power-up.
+function drawBanner(ctx: CanvasRenderingContext2D, stage: number, code: number, ticks: number, now: number) {
+  const street = stage === 2;
+  const B = street ? STREET.banner : ONSEN.banner;
+  const total = code === B.title ? B.titleT : code === B.cleared ? B.clearedT : street && code === STREET.banner.power ? STREET.banner.powerT : street ? STREET.banner.chiefT : ONSEN.banner.traitorT;
   const a = Math.min(1, ticks / 30, (total - ticks) / 12 + 0.01);
   ctx.save();
   ctx.globalAlpha = Math.max(0, a);
-  if (code === B.title) {
-    text(ctx, '溫泉關', VW / 2, 52, '#ffe060', 'center', 22);
-    text(ctx, '一夫當關　萬夫莫敵', VW / 2, 80, '#ffffff', 'center', 9);
+  if (street && code === STREET.banner.power) {
+    // the banana's power-up: green and gold, pulsing, with arrows rising
+    const pulse = 1 + 0.06 * Math.sin(now / 90);
+    ctx.save();
+    ctx.translate(VW / 2, 84);
+    ctx.scale(pulse, pulse);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    outlined(ctx, '主角戰鬥力提升', 0, 0, '900 20px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif', '#8dff6a', 4);
+    ctx.restore();
+    text(ctx, '1UP！', VW / 2, 100, '#ffe060', 'center', 12);
+    ctx.fillStyle = '#8dff6a';
+    for (let k = 0; k < 8; k++) {
+      const p = ((now / 700 + k * 0.125) % 1);
+      const x = VW / 2 - 70 + k * 20;
+      const y = Math.round(80 - p * 26);
+      ctx.globalAlpha = Math.max(0, a) * Math.sin(p * Math.PI);
+      ctx.fillRect(x, y, 1, 5);
+      ctx.fillRect(x - 2, y + 2, 5, 1);
+      ctx.fillRect(x - 1, y + 1, 3, 1);
+    }
+  } else if (code === B.title) {
+    if (street) {
+      text(ctx, '健康素食保衛戰', VW / 2, 52, '#8dff6a', 'center', 20);
+      text(ctx, '山賊來襲　守住這間店', VW / 2, 80, '#ffffff', 'center', 9);
+    } else {
+      text(ctx, '溫泉關', VW / 2, 52, '#ffe060', 'center', 22);
+      text(ctx, '一夫當關　萬夫莫敵', VW / 2, 80, '#ffffff', 'center', 9);
+    }
   } else if (code === B.cleared) {
-    text(ctx, '關口守住了', VW / 2, 56, '#ffe060', 'center', 20);
-    text(ctx, '五十名精英，無人能過', VW / 2, 82, '#ffffff', 'center', 9);
+    text(ctx, street ? '素食店保住了' : '關口守住了', VW / 2, 56, '#ffe060', 'center', 20);
+    text(ctx, street ? '一百個山賊和頭目，全被趕跑' : '五十名精英，無人能過', VW / 2, 82, '#ffffff', 'center', 9);
+  } else if (street) {
+    text(ctx, '山賊頭目登場！', VW / 2, 54, '#ff8060', 'center', 18);
+    text(ctx, '黃巾軍的首領親自來了', VW / 2, 78, '#ffffff', 'center', 9);
   } else {
     text(ctx, '叛徒出現！', VW / 2, 54, '#d8a0ff', 'center', 18);
     text(ctx, '小心背後', VW / 2, 78, '#ffffff', 'center', 9);
@@ -1588,12 +1830,16 @@ function drawHud(ctx: CanvasRenderingContext2D, snap: Snapshot, o: DrawOpts) {
     }
   }
 
+  // in the street the kill counter holds the top line, so the chief's bar goes under it
+  const streetFight = snap.sg === 2 && snap.ph >= 1;
+  if (streetFight) text(ctx, `健康素食　擊倒 ${Math.min(snap.kl, STREET.total)} / ${STREET.total}`, VW / 2, 3, '#8dff6a', 'center');
   const boss = snap.f.find((f) => DEFS[f.d]?.kind === 'boss' && f.s !== St.Dead);
+  const by = streetFight ? 13 : 3;
   if (boss) {
-    text(ctx, `${DEFS[boss.d].name} Lv.${snap.lp + 1}`, VW / 2, 3, '#ff9090', 'center');
-    bar(ctx, VW / 2 - 40, 14, 80, boss.h, boss.m);
+    text(ctx, `${DEFS[boss.d].name} Lv.${snap.lp + 1}`, VW / 2, by, '#ff9090', 'center');
+    bar(ctx, VW / 2 - 40, by + 11, 80, boss.h, boss.m);
   }
-  if (snap.lp > 0) text(ctx, `第 ${snap.lp + 1} 周　怪 Lv.${snap.lp + 1}`, VW / 2, 24, '#ffe060', 'center', 7);
+  if (snap.lp > 0) text(ctx, `第 ${snap.lp + 1} 周　怪 Lv.${snap.lp + 1}`, VW / 2, boss && streetFight ? 31 : 24, '#ffe060', 'center', 7);
 
   if (snap.s === 0 && snap.lk === 0 && snap.wv < snap.wt && Math.floor(o.now / 400) % 2 === 0) {
     text(ctx, 'GO ▶', VW - 12, 96, '#fff', 'right', 14);

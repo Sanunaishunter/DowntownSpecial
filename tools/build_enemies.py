@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Build the upper-rank samurai (bushi) and the general (shogun, boss) sprite sheets.
+"""Build the upper-rank samurai (bushi), the general (shogun, boss), the bandit and the bandit chief (boss) of 健康素食保衛戰, and
+the shop owner (a few standing poses, no fighting) sprite sheets. A character whose source sheets are not in art-src/ yet is skipped.
 
 Unlike the hero pipeline these characters have their own palette, extracted from their own art
 (median cut over every pose), and the general uses a bigger cell. The source sheets have black grid
@@ -7,7 +8,7 @@ lines between the cells; the lines give the exact cell boundaries.
 
     python3 tools/build_enemies.py [--preview out.png]
 
-Writes assets/gen/{bushi,shogun}.png and adds both to assets/manifest.json (other entries are kept).
+Writes assets/gen/{bushi,shogun,bandit,chief,owner}.png and adds them to assets/manifest.json (other entries are kept).
 """
 import json
 import sys
@@ -78,41 +79,112 @@ CHARS = [
         },
         looping={'walk'},
     ),
+    # the bandits of 健康素食保衛戰 are drawn on the same layout as the samurai, their chief on the general's
+    dict(
+        id='bandit', cell=(64, 56), anchor=(28, 52), target_h=38, colors=34, ref=('bandit-a.jpg', 'idle'),
+        sheets=[
+            dict(file='bandit-a.jpg', names=[['idle', 'walk1', 'walk2', 'walk3'], ['wind', 'slash', 'follow']]),
+            dict(file='bandit-b.jpg', names=[['hurt', 'fly', 'stand2', 'lying'], ['getup', 'rush', 'ready']], flip=['lying'], center=['fly']),
+        ],
+        anims={
+            'idle': (['idle'], [60]),
+            'walk': (['walk1', 'idle', 'walk2', 'idle'], [9, 6, 9, 6]),
+            'run': (['rush'], [60]),
+            'dash': (['rush'], [60]),
+            'punch': (['wind', 'slash', 'follow', 'follow'], [3, 3, 4, 2]),
+            'kick': (['ready', 'wind', 'slash', 'follow'], [5, 4, 5, 6]),
+            'hurt': (['hurt'], [60]),
+            'fly': (['fly'], [60]),
+            'down': (['lying'], [60]),
+            'dead': (['lying'], [60]),
+            'held': (['lying'], [60]),
+            'getup': (['getup'], [60]),
+        },
+        looping={'walk'},
+    ),
+    dict(
+        id='chief', cell=(88, 72), anchor=(40, 68), target_h=50, colors=26, ref=('chief-a.jpg', 'idle'),
+        sheets=[
+            dict(file='chief-a.jpg', names=[['idle', 'walk1', 'walk2'], ['wind', 'slam', 'follow']]),
+            dict(file='chief-b.jpg', names=[['hurt', {'fly': (350, 0, 760, 430), 'lying': (600, 340, 1024, 500)}], ['getup', 'rush', 'roar']],
+                 flip=['lying'], center=['fly'], erase={'roar': (800, 530, 1024, 615)}),
+        ],
+        anims={
+            'idle': (['idle'], [60]),
+            'walk': (['walk1', 'idle', 'walk2', 'idle'], [10, 6, 10, 6]),
+            'run': (['rush'], [60]),
+            'dash': (['rush'], [60]),
+            'punch': (['wind', 'slam', 'follow', 'follow'], [4, 4, 4, 2]),
+            'kick': (['roar', 'wind', 'slam', 'follow'], [5, 4, 5, 6]),
+            'hurt': (['hurt'], [60]),
+            'fly': (['fly'], [60]),
+            'down': (['lying'], [60]),
+            'dead': (['lying'], [60]),
+            'held': (['lying'], [60]),
+            'getup': (['getup'], [60]),
+        },
+        looping={'walk'},
+    ),
+    # the shop owner only stands there: idle, talking, and holding out the banana (the game draws him facing left by mirroring)
+    dict(
+        id='owner', cell=(48, 48), anchor=(22, 44), target_h=36, colors=20, ref=('owner-a.jpg', 'idle'),
+        sheets=[dict(file='owner-a.jpg', names=[['idle', 'talk', 'offer']])],
+        anims={'idle': (['idle'], [60]), 'talk': (['talk'], [60]), 'offer': (['offer'], [60])},
+        looping=set(),
+    ),
 ]
+# until the owner's three poses are drawn, his design picture does for all of them
+if not (SRC / 'owner-a.jpg').exists() and (SRC / 'owner-design.jpg').exists():
+    for c in CHARS:
+        if c['id'] == 'owner':
+            c['sheets'] = [dict(file='owner-design.jpg', names=[['idle']])]
+            c['ref'] = ('owner-design.jpg', 'idle')
+            c['anims'] = {'idle': (['idle'], [60]), 'talk': (['idle'], [60]), 'offer': (['idle'], [60])}
+# only the characters whose art is there
+CHARS = [c for c in CHARS if all((SRC / sh['file']).exists() for sh in c['sheets'])]
 
 
 def key_bg(im):
     border = np.concatenate([im[:8].reshape(-1, 3), im[-8:].reshape(-1, 3),
                              im[:, :8].reshape(-1, 3), im[:, -8:].reshape(-1, 3)])
+    border = border[border.max(1) >= 70]        # (not the black frame some sheets have)
     bg = np.median(border, axis=0)
     return np.sqrt(((im - bg) ** 2).sum(-1)) > BG_DIST
 
 
+def runs(idx, gap=3):
+    """Consecutive indices (allowing small gaps) grouped into [first, last] runs."""
+    groups = []
+    for c in idx:
+        if groups and c - groups[-1][1] <= gap:
+            groups[-1][1] = int(c)
+        else:
+            groups.append([int(c), int(c)])
+    return groups
+
+
 def grid_cells(im):
-    """Cell boxes (x0, x1, y0, y1) per row, from the black separator lines."""
+    """Cell boxes (x0, x1, y0, y1) per row, from the black separator lines. Every horizontal line starts a new row; rows may have
+    different numbers of cells (the lines between the cells of a row only have to span that row)."""
     H, W, _ = im.shape
     dark = im.max(2) < 70
-    hrows = np.nonzero(dark.mean(1) > 0.9)[0]
-    bounds = [0]
-    if hrows.size:
-        bounds += [int(hrows.min()), int(hrows.max()) + 1]
-    bounds.append(H)
-    bands = [(bounds[i], bounds[i + 1]) for i in range(0, len(bounds), 2) if bounds[i + 1] - bounds[i] > 20]
+    lines = runs(np.nonzero(dark.mean(1) > 0.9)[0])
+    bounds, y = [], 0
+    for g0, g1 in lines:
+        bounds.append((y, g0))
+        y = g1 + 1
+    bounds.append((y, H))
     rows = []
-    for y0, y1 in bands:
-        cols = np.nonzero(dark[y0:y1].mean(0) > 0.9)[0]
-        groups = []
-        for c in cols:
-            if groups and c - groups[-1][1] <= 3:
-                groups[-1][1] = int(c)
-            else:
-                groups.append([int(c), int(c)])
+    for y0, y1 in bounds:
+        if y1 - y0 <= 20:
+            continue
         cells, x = [], 0
-        for g0, g1 in groups:
+        for g0, g1 in runs(np.nonzero(dark[y0:y1].mean(0) > 0.9)[0]):
             cells.append((x, g0))
             x = g1 + 1
         cells.append((x, W))
-        rows.append([(a + 2, b - 2, y0 + 2, y1 - 2) for a, b in cells])
+        # (a frame drawn around the whole sheet leaves empty slivers at its edges)
+        rows.append([(a + 2, b - 2, y0 + 2, y1 - 2) for a, b in cells if b - a > 20])
     return rows
 
 
@@ -165,26 +237,38 @@ def cut_poses(char):
         for names, cells in zip(sh['names'], rows):
             if len(names) != len(cells):
                 sys.exit(f"{sh['file']}: expected {len(names)} cells in a row, found {len(cells)}")
-            for name, (x0, x1, y0, y1) in zip(names, cells):
-                y1 -= sh.get('trim_bottom', 0)      # caption text under the poses
-                m = np.zeros_like(fg)
-                m[y0:y1, x0:x1] = fg[y0:y1, x0:x1]
-                if name in sh.get('erase', {}):      # effect that touches the figure (slash arc)
-                    ex0, ey0, ex1, ey1 = sh['erase'][name]
-                    m[ey0:ey1, ex0:ex1] = False
-                if name in sh.get('erase_bright', {}):   # flames / impact stars (bright yellow) inside a box
-                    ex0, ey0, ex1, ey1 = sh['erase_bright'][name]
-                    r, g, b = im[..., 0], im[..., 1], im[..., 2]
-                    bright = (r > 225) & (g > 125) & (b < 160)
-                    box = np.zeros_like(m)
-                    box[ey0:ey1, ex0:ex1] = True
-                    m &= ~(bright & box)
-                m = drop_specks(m)
-                m = keep_main(m)
-                m = erode(m, 2)   # JPEG / background-blend fringe
-                if not m.any():
-                    sys.exit(f"{sh['file']}: pose '{name}' is empty")
-                poses[name] = (im, m, sh)
+            for cell_name, (x0, x1, y0, y1) in zip(names, cells):
+                # a cell that holds several poses (the sheet was not drawn on a neat grid) lists them with a box each: a figure
+                # belongs to the pose whose box has its middle in it, and everything else in the cell is dropped
+                for name, region in (cell_name.items() if isinstance(cell_name, dict) else [(cell_name, None)]):
+                    y1c = y1 - sh.get('trim_bottom', 0)      # caption text under the poses
+                    m = np.zeros_like(fg)
+                    m[y0:y1c, x0:x1] = fg[y0:y1c, x0:x1]
+                    if region:
+                        m = drop_specks(m)
+                        lab, n = label(m)
+                        keep = np.zeros_like(m)
+                        for k in range(1, n + 1):
+                            ys, xs = np.nonzero(lab == k)
+                            if region[0] <= xs.mean() < region[2] and region[1] <= ys.mean() < region[3]:
+                                keep |= lab == k
+                        m = keep
+                    if name in sh.get('erase', {}):      # effect that touches the figure (slash arc)
+                        ex0, ey0, ex1, ey1 = sh['erase'][name]
+                        m[ey0:ey1, ex0:ex1] = False
+                    if name in sh.get('erase_bright', {}):   # flames / impact stars (bright yellow) inside a box
+                        ex0, ey0, ex1, ey1 = sh['erase_bright'][name]
+                        r, g, b = im[..., 0], im[..., 1], im[..., 2]
+                        bright = (r > 225) & (g > 125) & (b < 160)
+                        box = np.zeros_like(m)
+                        box[ey0:ey1, ex0:ex1] = True
+                        m &= ~(bright & box)
+                    m = drop_specks(m)
+                    m = keep_main(m)
+                    m = erode(m, 2)   # JPEG / background-blend fringe
+                    if not m.any():
+                        sys.exit(f"{sh['file']}: pose '{name}' is empty")
+                    poses[name] = (im, m, sh)
     return poses
 
 
