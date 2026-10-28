@@ -1,4 +1,4 @@
-export const WID = { None: 0, Stick: 1, Bamboo: 2, Stone: 3, Saber: 4, Rifle: 5, Gatling: 6, Twin: 7, Bow: 8, Naginata: 9, Raikiri: 10 } as const;
+export const WID = { None: 0, Stick: 1, Bamboo: 2, Stone: 3, Saber: 4, Rifle: 5, Gatling: 6, Twin: 7, Bow: 8, Naginata: 9, Raikiri: 10, Spear: 11 } as const;
 
 /** Item kind of the 1UP the general drops: picked up by walking over it, never held. */
 export const ITEM_1UP = 100;
@@ -89,6 +89,11 @@ export const WEAPONS: Record<number, WeaponDef> = {
     atk: { start: 4, active: 4, total: 16, dmg: 20, reach: 46, kbx: 1.6, knock: false, launch: 2.2, stun: 18 },
     throwable: false, throwDmg: 0, throwVx: 0, dropWeight: 4, bossWeight: 40,
   },
+  [WID.Spear]: {
+    id: WID.Spear, name: '霸王槍', mode: 'melee', uses: UNLIMITED,
+    atk: { start: 6, active: 4, total: 20, dmg: 18, reach: 58, kbx: 1.4, knock: false, launch: 2.2, stun: 18 },
+    throwable: false, throwDmg: 0, throwVx: 0, dropWeight: 4, bossWeight: 40,
+  },
 };
 
 /** Blades that can be held two at a time, one in each hand. */
@@ -113,6 +118,19 @@ export const BOW = { gap: 12, draw: 7, speed: 4.6, life: 90, dmg: 10, range: 140
  * The hero cannot be hurt meanwhile. The next one comes no sooner than `cooldown` ticks later.
  */
 export const RAIN = { minRun: 4, chance: 0.2, cooldown: 900, dur: 60, count: 100, speed: 5.4, turn: 0.4, life: 80, dmg: 8, lift: 4 };
+
+/**
+ * 霸王槍 (the long spear with the red cloth tied under its head): an ordinary blow is a thrust with the longest reach of all,
+ * and it goes through everyone standing in the line. A thrust sometimes turns into one of two moves instead, with `chance`:
+ * 誰說沒槍頭就捅不死 (霸王破陣: the hero charges forward `thrustDur` ticks at `thrustSpeed`, stabbing everything on the way
+ * every `thrustGap` ticks) or 沒槍頭照樣捅死你 (a whirl of the spear `spinDur` ticks, hitting both sides every `spinGap` ticks while
+ * he walks on at `spinSpeed` x). Neither can be interrupted. The next one comes no sooner than `cooldown` ticks after.
+ */
+export const SPEAR = {
+  chance: 0.2, cooldown: 300,
+  thrustDur: 40, thrustSpeed: 3.4, thrustGap: 4, thrustDmg: 9, thrustReach: 44,
+  spinDur: 36, spinGap: 5, spinDmg: 7, spinReach: 54, spinSpeed: 0.6,
+};
 
 /** 鬼火雙頭薙刀: sets what it hits alight (`burnDmg` every `burnGap` ticks for `burn` ticks) and heals the wielder `heal` of max health per hit. */
 export const NAGINATA = { burn: 180, burnGap: 30, burnDmg: 3, heal: 0.03 };

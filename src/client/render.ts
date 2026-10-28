@@ -282,6 +282,7 @@ export class Renderer {
     ctx.restore();
     if (f.b & 256) drawBurn(ctx, ox, oy - Math.round(f.z), now, f.i);
     if (f.s === St.Staff) drawStaffSpin(ctx, ox, oy - Math.round(f.z), now);
+    if (f.s === St.Thrust || f.s === St.Flourish) drawSpearFx(ctx, ox, oy - Math.round(f.z), f.r, f.s === St.Thrust, f.t);
     if (tatsu) drawTornado(ctx, ox, oy - Math.round(f.z), f.t, false);
     if (whirlGfx) drawWhirl(ctx, ox, oy - Math.round(f.z), f.t, true, blades);
     if (f.s === St.Barrage) drawBarrage(ctx, ox, oy - Math.round(f.z), f.r, f.t);
@@ -816,6 +817,33 @@ function drawStaffSpin(ctx: CanvasRenderingContext2D, ox: number, oy: number, no
   ctx.restore();
 }
 
+// 霸王槍: red-and-gold streaks behind the charge, and a red wheel of cloth round the spinning spear.
+function drawSpearFx(ctx: CanvasRenderingContext2D, ox: number, oy: number, face: number, thrust: boolean, t: number) {
+  ctx.save();
+  if (thrust) {
+    for (let i = 0; i < 7; i++) {
+      const y = oy - 12 - ((i * 7 + t * 3) % 24);
+      const len = 14 + (i % 3) * 8;
+      ctx.fillStyle = i % 2 ? 'rgba(224,40,40,0.75)' : 'rgba(255,214,90,0.8)';
+      ctx.fillRect(face > 0 ? ox - 8 - len : ox + 8, Math.round(y), len, 1);
+    }
+  } else {
+    ctx.translate(ox, oy - 24);
+    ctx.lineCap = 'round';
+    for (let i = 0; i < 3; i++) {
+      const a0 = t * 0.7 + (i * Math.PI * 2) / 3;
+      for (const [w, c] of [[4, 'rgba(210,30,30,0.6)'], [1.5, 'rgba(255,214,90,0.95)']] as const) {
+        ctx.strokeStyle = c;
+        ctx.lineWidth = w;
+        ctx.beginPath();
+        ctx.arc(0, 0, 30, a0 - 0.8, a0);
+        ctx.stroke();
+      }
+    }
+  }
+  ctx.restore();
+}
+
 // 鬼火: green flames licking up the body of what the naginata has set alight.
 function drawBurn(ctx: CanvasRenderingContext2D, ox: number, oy: number, now: number, seed: number) {
   ctx.save();
@@ -957,6 +985,19 @@ function weaponGfx(ctx: CanvasRenderingContext2D, kind: number, heat = 0, spin =
       R('#7a4a20', 14, 0, 7, 2);
       R('#2c2c32', 6, 2, 3, 6);
       break;
+    case WID.Spear:
+      // 霸王槍: a long wooden shaft, a grey spearhead, and the big red cloth tied under the head
+      R('#5a3a1c', -12, -1, 46, 3);
+      R('#8a5a2a', -12, -1, 46, 1);
+      R('#a8aeb8', 34, -3, 7, 7);
+      R('#e4e9f2', 34, -3, 7, 2);
+      R('#e4e9f2', 41, -2, 4, 5);
+      R('#f6f8fc', 45, -1, 3, 3);
+      R('#b01010', 29, -3, 6, 10);
+      R('#e02828', 30, -3, 3, 8);
+      R('#8a0a0a', 32, 3, 4, 9);
+      R('#e02828', 28, 5, 3, 6);
+      break;
     case WID.Twin:
       // one of the two blades: a long steel blade with a gold guard and a red grip
       R('#6a1c1c', -5, -1, 7, 3);
@@ -1017,7 +1058,16 @@ function drawWeaponInHand(ctx: CanvasRenderingContext2D, f: SnapFighter) {
     ctx.restore();
     return;
   }
-  if (f.s === St.Swing) {
+  if (k === WID.Spear && (f.s === St.Swing || f.s === St.Thrust)) {
+    // the spear is stabbed straight ahead, not swung round
+    const p = f.s === St.Swing ? Math.sin(Math.min(1, f.t / (wd.atk.start + wd.atk.active + 2)) * Math.PI) : (f.t % 8 < 4 ? 0.2 : 1);
+    ctx.translate(2 + p * 16, -22);
+    weaponGfx(ctx, k);
+  } else if (k === WID.Spear && f.s === St.Flourish) {
+    ctx.translate(0, -24);
+    ctx.rotate(f.t * 0.7);
+    weaponGfx(ctx, k);
+  } else if (f.s === St.Swing) {
     const p = Math.min(1, f.t / (wd.atk.start + wd.atk.active + 2));
     ctx.translate(9, -22);
     ctx.rotate(-1.9 + p * 2.5);

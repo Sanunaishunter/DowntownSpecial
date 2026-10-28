@@ -4,6 +4,7 @@
   icons-bow.jpg   -> icon_8.png (遠古長弓, upright) and icon_arrow.png (靈氣箭, pointing right)
   icon-naginata.jpg -> icon_9.png  (鬼火雙頭薙刀, lying)
   icon-raikiri.jpg  -> icon_10.png (雷切, lying)
+  icon-spear.jpg    -> icon_11.png (霸王槍, turned to lie flat)
 
 and writes the "_icons" entry of assets/manifest.json: {"8": {image, w, h}, ..., "arrow": {...}}.
 The pictures are used for the weapons lying on the ground and for the flying arrows.
@@ -28,6 +29,7 @@ ICONS = [
     ('icons-bow.jpg', (325, 190, 405, 630), 26, -90, 'arrow'),
     ('icon-naginata.jpg', None, 54, 0, '9'),
     ('icon-raikiri.jpg', None, 46, 0, '10'),
+    ('icon-spear.jpg', None, 58, -45, '11'),
 ]
 
 
@@ -50,6 +52,7 @@ def build(file, box, size, rot, name):
     img = Image.fromarray(rgba, 'RGBA')
     if rot:
         img = img.rotate(rot, expand=True, resample=Image.NEAREST)
+        img = img.crop(img.getchannel('A').getbbox())  # the turned picture has empty corners
     k = size / max(img.size)
     small = img.resize((max(1, round(img.width * k)), max(1, round(img.height * k))), Image.BOX)
     arr = np.asarray(small).copy()

@@ -5,7 +5,7 @@ import { STAGE, type WaveDef } from './stage';
 import { St, type Fighter, type PlayerInput, type Shot, type Snapshot, type World } from './types';
 import { CHARGE, COMBO, CRIT, CRY, EV_AWAKEN, EV_CRIT, EV_DAMAGE, EV_RAIN, EV_ZAP } from './feel';
 import { ONSEN, STAGE_ONSEN, STAGE_TOKAIDO } from './onsen';
-import { BLADES, BOW, BULLET, NAGINATA, RAIKIRI, RAIN, STAFF, GATLING, ITEM_1UP, ITEM_TONIC, SHURIKEN, TWIN, UNLIMITED, WEAPONS, WID, type AtkDef } from './weapons';
+import { BLADES, BOW, BULLET, NAGINATA, RAIKIRI, RAIN, SPEAR, STAFF, GATLING, ITEM_1UP, ITEM_TONIC, SHURIKEN, TWIN, UNLIMITED, WEAPONS, WID, type AtkDef } from './weapons';
 
 const PEND_WINDOW = 3;
 const UPPER_WINDOW = 12;
@@ -32,6 +32,8 @@ const ATK: Record<number, AtkDef> = {
   [St.Stomp]: { start: 4, active: 3, total: 20, dmg: 8, reach: 14, kbx: 0, knock: false, launch: 0, stun: 0 },
   [St.Barrage]: { start: 2, active: BARRAGE.punches * BARRAGE.gap, total: 2 + BARRAGE.punches * BARRAGE.gap + 2, dmg: 3, reach: 24, kbx: 0.3, knock: false, launch: 0, stun: 18 },
   [St.Staff]: { start: 3, active: STAFF.dur, total: 3 + STAFF.dur + 8, dmg: STAFF.dmg, reach: STAFF.reach, kbx: 0.3, knock: false, launch: 0, stun: 16 },
+  [St.Thrust]: { start: 3, active: SPEAR.thrustDur, total: 3 + SPEAR.thrustDur + 10, dmg: SPEAR.thrustDmg, reach: SPEAR.thrustReach, kbx: 0.3, knock: false, launch: 0, stun: 16 },
+  [St.Flourish]: { start: 3, active: SPEAR.spinDur, total: 3 + SPEAR.spinDur + 8, dmg: SPEAR.spinDmg, reach: SPEAR.spinReach, kbx: 0.3, knock: false, launch: 0, stun: 16 },
   [St.Whirl]: { start: 4, active: TWIN.dur, total: 4 + TWIN.dur + 6, dmg: TWIN.dmg, reach: TWIN.reach, kbx: 0.3, knock: false, launch: 0, stun: 16 },
   [St.Tatsu]: { start: TATSU.rise, active: TATSU.total - TATSU.rise - TATSU.fall, total: TATSU.total, dmg: 5, reach: 26, kbx: 0.6, knock: false, launch: 0, stun: 18 },
 };
@@ -42,6 +44,8 @@ const MULTI: Record<number, { gap: number; both?: boolean }> = {
   [St.Tatsu]: { gap: TATSU.gap, both: true },
   [St.Whirl]: { gap: TWIN.gap, both: true },
   [St.Staff]: { gap: STAFF.gap, both: true },
+  [St.Thrust]: { gap: SPEAR.thrustGap },
+  [St.Flourish]: { gap: SPEAR.spinGap, both: true },
 };
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v);
@@ -378,9 +382,9 @@ function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
   if (f.storm > 0) tickStorm(w, f);
   tickHeat(w, f);
   tickCharge(w, f, held);
-  if (f.st === St.Whirl || f.st === St.Staff) {
-    // 炫風斬 / 鬼火旋舞: the spin does not stop the hero walking about
-    const sp = f.st === St.Staff ? STAFF.speed : TWIN.speed;
+  if (f.st === St.Whirl || f.st === St.Staff || f.st === St.Flourish) {
+    // 炫風斬 / 鬼火旋舞 / 沒槍頭照樣捅死你: the spin does not stop the hero walking about
+    const sp = f.st === St.Staff ? STAFF.speed : f.st === St.Flourish ? SPEAR.spinSpeed : TWIN.speed;
     f.vx = dx * d.walk * sp;
     f.vy = dy * d.walk * 0.7 * sp;
     if (dx) f.face = dx > 0 ? 1 : -1;
@@ -446,7 +450,13 @@ function resolveAction(w: World, f: Fighter, a: boolean, b: boolean, dx: number)
       f.wn2 = mate.n;
       setSt(f, St.Pick);
     } else if (wd.mode === 'ranged' && f.wn > 0 && !(f.weapon === WID.Gatling && f.heatCd > 0)) setSt(f, St.Shoot);
-    else if (f.weapon === WID.Naginata && staffRoll(w, f)) {
+    else if (f.weapon === WID.Spear && spearRoll(w, f)) {
+      // now and then the thrust becomes one of the two moves
+      const spin = hash01(w.tick, f.slot, 3) < 0.5;
+      setSt(f, spin ? St.Flourish : St.Thrust);
+      f.staffCd = SPEAR.cooldown;
+      shout(f, spin ? CRY.spear : CRY.thrust);
+    } else if (f.weapon === WID.Naginata && staffRoll(w, f)) {
       // now and then the swing becomes a spin
       setSt(f, St.Staff);
       f.staffCd = STAFF.cooldown;
@@ -585,6 +595,11 @@ function endGold(f: Fighter) {
   f.hp = Math.min(f.hp, f.maxHp);
   f.goldHp = 0;
   f.goldMp = 0;
+}
+
+/** Decided from the tick and the hero, so a replay turns out the same. */
+function spearRoll(w: World, f: Fighter) {
+  return f.staffCd <= 0 && hash01(w.tick, f.slot, 61) < SPEAR.chance;
 }
 
 /** Decided from the tick and the hero, so a replay turns out the same. */
@@ -873,6 +888,22 @@ function updateBody(w: World, f: Fighter) {
         setSt(f, St.Idle);
       }
       break;
+    case St.Thrust:
+      // 霸王破陣: straight ahead, nothing stops it
+      f.vx = f.face * SPEAR.thrustSpeed;
+      f.vy = 0;
+      if (f.t >= ATK[St.Thrust].total) {
+        f.vx = 0;
+        setSt(f, St.Idle);
+      }
+      break;
+    case St.Flourish:
+      if (f.t >= ATK[St.Flourish].total) {
+        f.vx = 0;
+        f.vy = 0;
+        setSt(f, St.Idle);
+      }
+      break;
     case St.Whirl:
       if (f.t >= ATK[St.Whirl].total) {
         f.vx = 0;
@@ -984,7 +1015,7 @@ function die(w: World, f: Fighter) {
 export function hit(w: World, t: Fighter, srcSlot: number, dmg: number, kbx: number, knock: boolean, launch: number, dir: number, chain = false) {
   dmg = strike(w, srcSlot, t, dmg);
   // 百裂拳 and 龍捲風腳 cannot be interrupted: the hits still hurt, unless they would be lethal
-  const firm = isPlayer(t) && (t.st === St.Barrage || t.st === St.Tatsu || t.st === St.Whirl || t.st === St.Staff);
+  const firm = isPlayer(t) && (t.st === St.Barrage || t.st === St.Tatsu || t.st === St.Whirl || t.st === St.Staff || t.st === St.Thrust || t.st === St.Flourish);
   if (isPlayer(t) && (t.shield > 0 || firm)) {
     // 聖盾: a third of the damage and no flinching, unless it would still be lethal
     if (t.shield > 0) dmg = Math.max(1, Math.round(dmg / (1 + SHIELD.def)));
@@ -1242,7 +1273,7 @@ function specialActive(f: Fighter) {
 function canStartSpecial(f: Fighter, id: number) {
   if (f.hp <= 0 || f.sp[id] > 0 || f.holding) return false;
   if (f.st === St.Hurt || f.st === St.Down || f.st === St.GetUp || f.st === St.Dead || f.st === St.Held || f.st === St.Stomp) return false;
-  if (id === SP.Beam) return f.z === 0 && f.st !== St.Beam && f.st !== St.Barrage && f.st !== St.Tatsu && f.st !== St.Whirl && f.st !== St.Staff;
+  if (id === SP.Beam) return f.z === 0 && f.st !== St.Beam && f.st !== St.Barrage && f.st !== St.Tatsu && f.st !== St.Whirl && f.st !== St.Staff && f.st !== St.Thrust && f.st !== St.Flourish;
   if (id === SP.Shield) return f.z === 0 && f.st !== St.Beam;
   return true;
 }

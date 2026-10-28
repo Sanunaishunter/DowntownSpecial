@@ -28,6 +28,8 @@ export const St = {
   Whirl: 26,
   Charge: 27,
   Staff: 28,
+  Thrust: 29,
+  Flourish: 30,
 } as const;
 
 export const ST_NAMES: string[] = [];

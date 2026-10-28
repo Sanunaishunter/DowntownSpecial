@@ -4,7 +4,7 @@ import { Btn } from '../src/shared/constants';
 import { addPlayer, createWorld, enterOnsen, hit, snapshot, step } from '../src/shared/sim';
 import { AURA, BARRAGE, BEAM, ENEMY_HALO, HALO, MP_MAX, SHIELD, SP, SPECIALS, TATSU, THUNDER, VOLLEY } from '../src/shared/specials';
 import { St, type Fighter, type GameEvent, type PlayerInput, type World } from '../src/shared/types';
-import { BOW, GATLING, ITEM_1UP, ITEM_TONIC, NAGINATA, RAIKIRI, RAIN, STAFF, TWIN, WEAPONS, WID } from '../src/shared/weapons';
+import { BOW, GATLING, ITEM_1UP, ITEM_TONIC, NAGINATA, RAIKIRI, RAIN, SPEAR, STAFF, TWIN, WEAPONS, WID } from '../src/shared/weapons';
 import { DEFS } from '../src/shared/defs';
 import { STAGE } from '../src/shared/stage';
 import { ONSEN, STAGE_ONSEN, STAGE_TOKAIDO } from '../src/shared/onsen';
@@ -13,6 +13,7 @@ import { ONSEN, STAGE_ONSEN, STAGE_TOKAIDO } from '../src/shared/onsen';
 CRIT.chance = 0;
 // and the bow never turns into 萬箭齊發 by chance
 RAIN.chance = 0;
+SPEAR.chance = 0;
 
 const none: PlayerInput = { held: 0, pressed: 0 };
 
@@ -1827,6 +1828,86 @@ describe('奧義 萬箭齊發', () => {
     } finally {
       RAIN.chance = 0;
     }
+  });
+});
+
+describe('霸王槍', () => {
+  function start(w: World, p: Fighter, st: number) {
+    p.st = st;
+    p.t = 0;
+    p.hits = [];
+  }
+
+  it('thrusts a long way and goes through everyone standing in the line', () => {
+    const w = setup();
+    const p = give(w, WID.Spear);
+    const a = foe(w, 30, 0, 'saburo', 'grunt', 9999);
+    const b = foe(w, 52, 0, 'saburo', 'grunt', 9999);
+    const side = foe(w, 40, 20, 'saburo', 'grunt', 9999);
+    const behind = foe(w, -30, 0, 'saburo', 'grunt', 9999);
+    for (const e of [a, b, side, behind]) e.aiT = 99999;
+    press(w, Btn.A);
+    run(w, 26);
+    expect(a.hp).toBeLessThan(9999);
+    expect(b.hp).toBeLessThan(9999);
+    expect(side.hp).toBe(9999);
+    expect(behind.hp).toBe(9999);
+    expect(p.wn).toBe(WEAPONS[WID.Spear].uses);
+    expect(WEAPONS[WID.Spear].atk.reach).toBeGreaterThan(WEAPONS[WID.Raikiri].atk.reach);
+  });
+
+  it('now and then a thrust becomes one of the two moves, shouted by name', () => {
+    const w = setup();
+    SPEAR.chance = 1;
+    try {
+      const p = give(w, WID.Spear);
+      const seen = new Set<number>();
+      for (let n = 0; n < 60 && seen.size < 2; n++) {
+        press(w, Btn.A);
+        run(w, 3);
+        if (p.st === St.Thrust || p.st === St.Flourish) {
+          seen.add(p.st);
+          expect(p.staffCd).toBeGreaterThan(SPEAR.cooldown - 10);
+          expect(CRY_TEXT[p.cry]).toBe(p.st === St.Thrust ? '誰說沒槍頭就捅不死！' : '沒槍頭照樣捅死你！');
+        }
+        run(w, 60);
+        p.staffCd = 0;
+        p.x = 60;
+      }
+      expect(seen.size).toBe(2);
+    } finally {
+      SPEAR.chance = 0;
+    }
+  });
+
+  it('the charge (誰說沒槍頭就捅不死) runs forward and stabs everything on the way', () => {
+    const w = setup();
+    const p = give(w, WID.Spear);
+    p.x = 60;
+    const foes = [40, 80, 120].map((dx) => foe(w, dx, 0, 'saburo', 'grunt', 9999));
+    for (const e of foes) e.aiT = 99999;
+    start(w, p, St.Thrust);
+    const x0 = p.x;
+    run(w, 20);
+    expect(p.x).toBeGreaterThan(x0 + 40);
+    expect(p.st).toBe(St.Thrust);
+    run(w, 40);
+    expect(p.st).not.toBe(St.Thrust);
+    for (const e of foes) expect(e.hp).toBeLessThan(9999);
+  });
+
+  it('the whirl (沒槍頭照樣捅死你) hits both sides while he walks on', () => {
+    const w = setup();
+    const p = give(w, WID.Spear);
+    const front = foe(w, 30, 0, 'saburo', 'grunt', 9999);
+    const back = foe(w, -30, 0, 'saburo', 'grunt', 9999);
+    for (const e of [front, back]) e.aiT = 99999;
+    start(w, p, St.Flourish);
+    const x0 = p.x;
+    run(w, 30, { held: Btn.Right, pressed: 0 });
+    expect(front.hp).toBeLessThan(9999);
+    expect(back.hp).toBeLessThan(9999);
+    expect(p.x).toBeGreaterThan(x0 + 3);
   });
 });
 

@@ -1,13 +1,15 @@
 // Background music: looping tracks from /assets/music/<name>.mp3 (or .ogg), cross-faded when the scene changes.
-// A track that is not there is simply skipped: a scene lists the names it would like, best first, and gets the first that exists.
+// A scene lists the names it would like, best first, and gets the first file that exists; with no file at all the tune of the
+// first name is played from the synthesizer (synth.ts), so there is always music.
+import { Synth, TUNES } from './synth';
 
 const LEVEL = 0.55;
 const FADE = 1.2;
 
 interface Playing {
   key: string;
-  src: AudioBufferSourceNode;
   gain: GainNode;
+  stop: (t: number) => void;
 }
 
 export class Music {
@@ -47,6 +49,11 @@ export class Music {
       if (want) this.play(want.split('|'));
     }
     if (this.ctx.state === 'suspended' && !document.hidden) void this.ctx.resume();
+  }
+
+  /** The audio context and the volume node everything goes through (muting is done there), once the first tap has unlocked sound. */
+  node(): { ctx: AudioContext; out: GainNode } | null {
+    return this.ctx && this.master ? { ctx: this.ctx, out: this.master } : null;
   }
 
   setMuted(m: boolean) {
@@ -96,12 +103,13 @@ export class Music {
         }
       }
       if (this.want !== key || !this.ctx || !this.master) return;
+      if (!buf) name = `synth:${names[0]}`;
       if (this.cur?.key === name) return;
-      this.swap(name, buf);
+      this.swap(name, buf, names[0]);
     })();
   }
 
-  private swap(name: string, buf: AudioBuffer | null) {
+  private swap(name: string, buf: AudioBuffer | null, scene: string) {
     const ctx = this.ctx!;
     const t = ctx.currentTime;
     const old = this.cur;
@@ -109,18 +117,23 @@ export class Music {
       old.gain.gain.cancelScheduledValues(t);
       old.gain.gain.setValueAtTime(old.gain.gain.value, t);
       old.gain.gain.linearRampToValueAtTime(0, t + FADE);
-      old.src.stop(t + FADE + 0.05);
+      old.stop(t + FADE + 0.05);
     }
     this.cur = null;
-    if (!buf) return;
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.loop = true;
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0, t);
     gain.gain.linearRampToValueAtTime(1, t + FADE);
-    src.connect(gain).connect(this.master!);
-    src.start();
-    this.cur = { key: name, src, gain };
+    gain.connect(this.master!);
+    if (buf) {
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      src.connect(gain);
+      src.start();
+      this.cur = { key: name, gain, stop: (at) => src.stop(at) };
+    } else if (TUNES[scene]) {
+      const synth = new Synth(ctx, TUNES[scene], gain);
+      this.cur = { key: name, gain, stop: () => window.setTimeout(() => synth.stop(), FADE * 1000 + 50) };
+    }
   }
 }

@@ -64,6 +64,11 @@ SHEETS = [
          skip=["na_slash", "na_pick"]),
     dict(file="sheet-raikiri.jpg", grid=(3, 2), names=["ra_ready", "ra_wind", "ra_slash", "ra_low", "ra_sky", "ra_pick"],
          scale_from="sheet-twin.jpg", main_only=True, skip=["ra_sky", "ra_pick"]),
+    # 霸王槍: the poses are not on a tidy grid (3 / 2 / 2 across three rows), so they are told apart by shape
+    dict(file="sheet-spear.jpg", grid=(3, 3),
+         names=["sp_ready", "sp_diag", "sp_wind", "sp_charge", "sp_none1", "sp_spin", "sp_thrust", "sp_none2", "sp_pick"],
+         scale_from="sheet-twin.jpg", main_only=True, split="components", grow=0,
+         skip=["sp_diag", "sp_none1", "sp_none2", "sp_pick"]),
     dict(file="sheet-blades.jpg", grid=(3, 2), names=["bready", "bwind", "bstrike", "sready", "sstrike", "swind"],
          scale_from="sheet-special.jpg", main_only=True, split="components", grow=0, auto_gain=True),
     dict(file="sheet-heavy.jpg", grid=(3, 2), names=["stcarry", "stwind", "stsmash", "rready", "rfire", "rbash"],
@@ -155,8 +160,9 @@ TWIN_POSES = ["tready", "twind", "tslash1", "tslash2", "twhirl2"]
 BOW_POSES = ["yu_ready", "yu_draw", "yu_rel"]
 NAGI_POSES = ["na_ready", "na_wind", "na_smash", "na_spin"]
 RAI_POSES = ["ra_ready", "ra_wind", "ra_slash", "ra_low"]
+SPEAR_POSES = ["sp_ready", "sp_wind", "sp_thrust", "sp_charge", "sp_spin"]
 for _n in ("steel", "steel_dark", "gold", "grip"):
-    ENTRY_SCOPE[_n] = TWIN_POSES + NAGI_POSES + RAI_POSES
+    ENTRY_SCOPE[_n] = TWIN_POSES + NAGI_POSES + RAI_POSES + SPEAR_POSES
 for _n in ("feather", "feather_dark", "feather_gold", "teal", "teal_dark"):
     ENTRY_SCOPE[_n] = BOW_POSES
 for _n in ("fire_green", "fire_dark", "fire_light", "iron"):
@@ -199,10 +205,10 @@ BASE_FRAMES = [
 # Armed stances per weapon suffix: the upper body of the "ready" frame is grafted onto
 # the legs of each locomotion frame. _w = stick, _w2 = bamboo sword, _w4 = energy sword.
 ARMED_BASES = ["walk1", "walk2", "walk3", "run1", "run2", "jump"]
-ARMED_SETS = {"_w": "idle_w", "_w2": "bready", "_w3": "stcarry", "_w4": "sready", "_w5": "rready", "_w7": "tready", "_w8": "yu_ready", "_w9": "na_ready", "_w10": "ra_ready"}
+ARMED_SETS = {"_w": "idle_w", "_w2": "bready", "_w3": "stcarry", "_w4": "sready", "_w5": "rready", "_w7": "tready", "_w8": "yu_ready", "_w9": "na_ready", "_w10": "ra_ready", "_w11": "sp_ready"}
 ARMED = [f"{b}{suf}" for suf in ARMED_SETS for b in ARMED_BASES]
 # the twin swords' own poses come last so that every earlier frame keeps its number
-FRAME_ORDER = BASE_FRAMES + ARMED + TWIN_POSES + BOW_POSES + NAGI_POSES + RAI_POSES
+FRAME_ORDER = BASE_FRAMES + ARMED + TWIN_POSES + BOW_POSES + NAGI_POSES + RAI_POSES + SPEAR_POSES
 
 # anim name -> frames (by pose name) and per-frame duration in game ticks
 ANIMS = {
@@ -235,7 +241,7 @@ ANIMS = {
     "shoot": (["windup", "punch", "windup"], [2, 6, 2]),
 }
 LOOPING = {"walk", "run", "hold"}
-for _suf, _idle in (("_w", "idle_w"), ("_w2", "bready"), ("_w3", "stcarry"), ("_w4", "sready"), ("_w5", "rready"), ("_w7", "tready"), ("_w8", "yu_ready"), ("_w9", "na_ready"), ("_w10", "ra_ready")):
+for _suf, _idle in (("_w", "idle_w"), ("_w2", "bready"), ("_w3", "stcarry"), ("_w4", "sready"), ("_w5", "rready"), ("_w7", "tready"), ("_w8", "yu_ready"), ("_w9", "na_ready"), ("_w10", "ra_ready"), ("_w11", "sp_ready")):
     ANIMS[f"idle{_suf}"] = ([_idle], [60])
     ANIMS[f"walk{_suf}"] = ([f"walk1{_suf}", f"walk2{_suf}", f"walk3{_suf}", f"walk2{_suf}"], [8, 8, 8, 8])
     ANIMS[f"run{_suf}"] = ([f"run1{_suf}", f"run2{_suf}"], [4, 4])
@@ -252,6 +258,9 @@ ANIMS["shoot_w8"] = (["yu_draw", "yu_rel"], [7, 5])
 ANIMS["swing_w9"] = (["na_wind", "na_smash", "na_ready"], [6, 6, 10])
 ANIMS["staff_w9"] = (["na_spin"], [60])
 ANIMS["swing_w10"] = (["ra_wind", "ra_slash", "ra_low"], [4, 4, 8])
+ANIMS["swing_w11"] = (["sp_wind", "sp_charge", "sp_thrust"], [6, 4, 10])
+ANIMS["thrust_w11"] = (["sp_charge"], [60])
+ANIMS["flourish_w11"] = (["sp_spin"], [60])
 ANIMS["shoot_w5"] = (["rready", "rfire", "rready"], [2, 6, 2])
 LOOP_FROM = {"beam": 2}  # after the last frame, repeat from this frame index
 

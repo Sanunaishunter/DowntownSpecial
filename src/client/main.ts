@@ -6,6 +6,7 @@ import { Assets } from './assets';
 import { Input, setupTouch } from './input';
 import { Music } from './music';
 import { Renderer } from './render';
+import { Sfx } from './sfx';
 import { SKILL_ICONS } from './skillicons';
 import { LocalSession, NetSession, type Session } from './session';
 
@@ -56,6 +57,7 @@ async function main() {
   });
 
   const music = new Music();
+  const sfx = new Sfx(() => music.node(), () => music.muted);
   const muteBtn = $('mute');
   const showMute = () => muteBtn.classList.toggle('off', music.muted);
   muteBtn.onclick = () => {
@@ -168,7 +170,9 @@ async function main() {
     if (session) {
       session.update(now);
       snap = session.view(now);
-      renderer.addFx(session.takeFx(), now);
+      const fx = session.takeFx();
+      renderer.addFx(fx, now);
+      sfx.events(fx, now);
       netInfo.textContent = session.info();
       const mine = snap?.sl[session.mySlot()];
       const me = snap && mine ? snap.f.find((q) => q.i === mine.f) : undefined;
@@ -185,6 +189,7 @@ async function main() {
         hint = '把網址傳給朋友，等他加入…';
       }
     }
+    sfx.scan(snap, now);
     // the tune follows the scene: the shogun's fight, 溫泉關, the road, and the menu while nobody is playing
     if (!snap) music.play(['menu', 'tokaido']);
     else if (snap.f.some((f) => f.d === 'shogun' && f.h > 0)) music.play(['shogun', 'tokaido']);
