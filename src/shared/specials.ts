@@ -48,8 +48,8 @@ export const HALO = { dur: 600, rx: 30, ry: 12, rate: 0.01, gap: 6 };
  * Their circle is shorter (4 seconds, so 40%) and the caster stays in it until it is over, or until it gets knocked out of it.
  */
 export const ENEMY_HALO = { below: 0.6, dur: 240, chance: 1 / 90, cooldown: 600 };
-/** 爆氣: +200% damage for 20 seconds. */
-export const AURA = { dur: 1200, mult: 2 };
+/** 爆氣: +200% damage for 20 seconds. A 龜甲砲 fired while it lasts is `beamMul` times as wide, as long and as lasting. */
+export const AURA = { dur: 1200, mult: 2, beamMul: 4 };
 /** 聖盾: +200% defence (damage taken / 3), no flinching, no walking, 10 seconds. */
 export const SHIELD = { dur: 600, def: 2 };
 /** 天雷萬鈞: for 10 seconds lightning keeps coming down on the battlefield, one strike every `gap` ticks. */

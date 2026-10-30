@@ -64,6 +64,11 @@ function setSt(f: Fighter, st: number) {
   f.hits = [];
 }
 
+/** The bow does not root the hero, and neither does the arrow rain. */
+function walksWhileShooting(f: Fighter) {
+  return f.rain > 0 || (isPlayer(f) && f.weapon === WID.Bow);
+}
+
 function mkFighter(w: World, def: string, slot: number, x: number, y: number): Fighter {
   const d = DEFS[def];
   return {
@@ -127,6 +132,7 @@ function mkFighter(w: World, def: string, slot: number, x: number, y: number): F
     mp: 0,
     volley: 0,
     volleyCd: 0,
+    beamMul: 1,
     cast: 0,
     sp: [0, 0, 0, 0, 0, 0],
     aura: 0,
@@ -401,8 +407,8 @@ function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
     f.vy = dy * d.walk * 0.7 * sp;
     if (dx) f.face = dx > 0 ? 1 : -1;
   }
-  if (f.st === St.Shoot && f.rain > 0) {
-    // 萬箭齊發: the hero walks about while the arrows fly
+  if (f.st === St.Shoot && walksWhileShooting(f)) {
+    // the bow (and 萬箭齊發) does not root the hero: he walks about while the arrows fly
     f.vx = dx * d.walk;
     f.vy = dy * d.walk * 0.7;
     if (dx) f.face = dx > 0 ? 1 : -1;
@@ -857,8 +863,8 @@ function updateBody(w: World, f: Fighter) {
       if (f.t >= (atkFor(f)?.total ?? (f.st === St.Pick ? 10 : 12))) setSt(f, St.Idle);
       break;
     case St.Shoot:
-      // (in the arrow rain the hero walks, see the step above)
-      if (!(f.rain > 0)) {
+      // (a hero with the bow walks while he shoots, see the step above)
+      if (!walksWhileShooting(f)) {
         f.vx = 0;
         f.vy = 0;
       }
@@ -1310,6 +1316,7 @@ function triggerSpecial(w: World, f: Fighter, id: number) {
   switch (id) {
     case SP.Beam:
       setSt(f, St.Beam);
+      f.beamMul = f.aura > 0 ? AURA.beamMul : 1;
       f.vx = 0;
       f.vy = 0;
       break;
@@ -1364,7 +1371,8 @@ function updateMeter(f: Fighter) {
   let frac = -1;
   if (f.st === St.Beam) {
     const fireT = f.t - BEAM.charge;
-    frac = Math.max(frac, fireT < 0 ? 1 : fireT < BEAM.fire ? 1 - fireT / BEAM.fire : 0);
+    const fire = BEAM.fire * f.beamMul;
+    frac = Math.max(frac, fireT < 0 ? 1 : fireT < fire ? 1 - fireT / fire : 0);
   }
   if (f.volley > 0) frac = Math.max(frac, f.volley / VOLLEY.shots);
   if (f.aura > 0) frac = Math.max(frac, f.aura / AURA.dur);
@@ -1533,19 +1541,20 @@ function updateBeam(w: World, f: Fighter) {
   f.vy = 0;
   f.inv = Math.max(f.inv, 2);
   const fireT = f.t - BEAM.charge;
-  if (fireT >= BEAM.fire + BEAM.recover) {
+  const fire = BEAM.fire * f.beamMul;
+  if (fireT >= fire + BEAM.recover) {
     setSt(f, St.Idle);
     return;
   }
-  if (fireT >= BEAM.fire || fireT < 0) return;
+  if (fireT >= fire || fireT < 0) return;
   if (fireT % BEAM.pulse !== 0) return;
   const dmg = Math.max(1, Math.round(BEAM.dmg * DEFS[f.def].dmg * (f.aura > 0 ? AURA.mult : 1)));
   for (const t of w.fighters) {
     if (isPlayer(t) || t.heldBy) continue;
     if (t.st === St.Down || t.st === St.GetUp || t.st === St.Dead) continue;
     const rx = (t.x - f.x) * f.face;
-    if (rx < 4 || rx > BEAM.len + 10) continue;
-    if (Math.abs(t.y - f.y) > BEAM.halfDepth) continue;
+    if (rx < 4 || rx > BEAM.len * f.beamMul + 10) continue;
+    if (Math.abs(t.y - f.y) > BEAM.halfDepth * f.beamMul) continue;
     if (Math.abs(t.z - f.z - 14) > 30) continue;
     pinHit(w, t, f.slot, dmg, f.face);
   }
@@ -2059,7 +2068,7 @@ export function snapshot(w: World): Snapshot {
       n2: f.wn2,
       c: f.cast,
       ht: f.heatCd > 0 ? 500 + Math.ceil(f.heatCd / 60) : f.heat,
-      b: (f.storm > 0 ? 16 : 0) | (f.elite === 1 ? 32 : 0) | (f.burn > 0 ? 256 : 0) | (f.gold > 0 ? 512 : 0) | (f.st === St.Charge ? 1024 : 0) | (f.elite === 2 ? 64 : 0) | (f.script ? 128 : 0) | (f.aura > 0 ? 1 : 0) | (f.shield > 0 ? 2 : 0) | (f.halo > 0 ? 4 : 0) | ((f.aura > 0 && f.aura < 120) || (f.shield > 0 && f.shield < 120) ? 8 : 0),
+      b: (f.storm > 0 ? 16 : 0) | (f.elite === 1 ? 32 : 0) | (f.burn > 0 ? 256 : 0) | (f.gold > 0 ? 512 : 0) | (f.st === St.Charge ? 1024 : 0) | (f.st === St.Beam && f.beamMul > 1 ? 2048 : 0) | (f.elite === 2 ? 64 : 0) | (f.script ? 128 : 0) | (f.aura > 0 ? 1 : 0) | (f.shield > 0 ? 2 : 0) | (f.halo > 0 ? 4 : 0) | ((f.aura > 0 && f.aura < 120) || (f.shield > 0 && f.shield < 120) ? 8 : 0),
       k: f.kind === 'player' ? f.sp.slice() : [],
       cb: f.kind === 'player' ? f.chain : 0,
       ch: f.st === St.Charge ? f.charge : 0,

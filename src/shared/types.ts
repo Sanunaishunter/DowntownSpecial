@@ -111,6 +111,8 @@ export interface Fighter {
   mp: number;
   volley: number;
   volleyCd: number;
+  /** how many times bigger the 龜甲砲 under way is (2 when it was fired under 爆氣, else 1) */
+  beamMul: number;
   cast: number;
   /** per-special cooldown ticks (index = special id) */
   sp: number[];
@@ -234,7 +236,7 @@ export interface SnapFighter {
   ht: number;
   /** 光環 circle: [x, y, ticks left] while it is on the ground, otherwise empty */
   hl: number[];
-  /** buffs: 1 aura, 2 shield, 4 halo light, 8 a buff is about to end, 16 lightning storm, 32 elite, 64 traitor, 128 scripted (envoy), 256 burning, 512 golden form, 1024 charging */
+  /** buffs: 1 aura, 2 shield, 4 halo light, 8 a buff is about to end, 16 lightning storm, 32 elite, 64 traitor, 128 scripted (envoy), 256 burning, 512 golden form, 1024 charging, 2048 a 爆氣 龜甲砲 under way */
   b: number;
   /** cooldown ticks left per special (players only, empty for everyone else) */
   k: number[];

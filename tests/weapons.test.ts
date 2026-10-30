@@ -124,6 +124,37 @@ describe('beam special', () => {
     expect(dealt).toBeGreaterThanOrEqual(BEAM.dmg * (BEAM.fire / BEAM.pulse) * 0.9);
   });
 
+  it('is four times as wide, as long and as lasting when fired under 爆氣', () => {
+    const fire = (aura: boolean) => {
+      const w = setup();
+      const p = player(w);
+      p.face = 1;
+      p.aura = aura ? 5000 : 0;
+      const mk = (dx: number, dy: number) => {
+        const e = foe(w, dx, dy, 'saburo', 'grunt', 99999);
+        e.sp[SP.Halo] = 99999;
+        return e;
+      };
+      const far = mk(600, 0);
+      const side = mk(60, 50);
+      press(w, Btn.S1);
+      run(w, BEAM.charge + 20);
+      const longer = { far: far.hp < 99999, side: side.hp < 99999 };
+      // a plain beam (and its recovery) is over by now
+      run(w, BEAM.fire);
+      const stillFiring = p.st === St.Beam;
+      run(w, BEAM.fire * (aura ? AURA.beamMul - 1 : 1) + BEAM.recover);
+      return { longer, stillFiring, over: p.st === St.Idle };
+    };
+    const plain = fire(false);
+    expect(plain.longer).toEqual({ far: false, side: false });
+    expect(plain.stillFiring).toBe(false);
+    const big = fire(true);
+    expect(big.longer).toEqual({ far: true, side: true });
+    expect(big.stillFiring).toBe(true);
+    expect(big.over).toBe(true);
+  });
+
   it('makes the caster untouchable while firing', () => {
     const w = setup();
     const p = player(w);
@@ -1992,6 +2023,24 @@ describe('奧義 萬箭齊發', () => {
     }
   });
 
+  it('lets the hero walk about while he shoots the bow, rain or not', () => {
+    const w = setup();
+    const p = give(w, WID.Bow);
+    press(w, Btn.A);
+    const x0 = p.x;
+    run(w, 40, { held: Btn.A | Btn.Right, pressed: 0 });
+    expect(p.st).toBe(St.Shoot);
+    expect(p.x).toBeGreaterThan(x0 + 20);
+    // the other weapons that shoot still stand their ground
+    const g = setup();
+    const q = give(g, WID.Rifle);
+    press(g, Btn.A);
+    run(g, 10, { held: Btn.A, pressed: 0 });
+    const gx = q.x;
+    run(g, 20, { held: Btn.A | Btn.Right, pressed: 0 });
+    expect(q.x).toBe(gx);
+  });
+
   it('lets the hero walk about while the arrows fly', () => {
     const { w, p } = rain();
     try {
@@ -2005,12 +2054,6 @@ describe('奧義 萬箭齊發', () => {
       expect(p.y).toBeGreaterThan(y0 + 10);
       expect(p.st).toBe(St.Shoot);
       expect(p.inv).toBeGreaterThan(0);
-      // and when it is over he stands still again
-      RAIN.chance = 0;
-      run(w, RAIN.dur, { held: Btn.A, pressed: 0 });
-      const x1 = p.x;
-      run(w, 10, { held: Btn.A | Btn.Right, pressed: 0 });
-      expect(p.x).toBe(x1);
     } finally {
       RAIN.chance = 0;
     }

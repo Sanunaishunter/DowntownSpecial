@@ -3,7 +3,7 @@ import { ONSEN } from '../shared/onsen';
 import { STREET } from '../shared/street';
 import { CRY, CRY_TEXT, EV_AWAKEN, EV_CRIT, EV_DAMAGE, EV_RAIN, EV_UP, EV_ZAP } from '../shared/feel';
 import { DEFS } from '../shared/defs';
-import { BEAM, HALO, MP_MAX, SPECIALS } from '../shared/specials';
+import { AURA, BEAM, HALO, MP_MAX, SPECIALS } from '../shared/specials';
 import { St, type GameEvent, type SnapFighter, type SnapItem, type Snapshot } from '../shared/types';
 import { GATLING, ITEM_1UP, ITEM_TONIC, UNLIMITED, WEAPONS, WID } from '../shared/weapons';
 import type { Assets } from './assets';
@@ -1130,7 +1130,7 @@ function shadow(ctx: CanvasRenderingContext2D, x: number, y: number, z: number, 
 // other weapons reuse unarmed poses and are drawn on top.
 function artFor(f: SnapFighter, hasArt: boolean): { weapon: number; anim?: string; t: number } {
   if (f.s === St.Down && f.z > 0) return { weapon: 0, anim: 'fly', t: f.t };
-  if (f.s === St.Beam) return { weapon: 0, anim: f.t >= BEAM.charge + BEAM.fire ? 'beamend' : 'beam', t: f.t };
+  if (f.s === St.Beam) return { weapon: 0, anim: f.t >= BEAM.charge + BEAM.fire * (f.b & 2048 ? AURA.beamMul : 1) ? 'beamend' : 'beam', t: f.t };
   if (f.s === St.Barrage) return { weapon: 0, anim: 'punch', t: f.t % 12 };
   if (f.s === St.Tatsu) return { weapon: 0, anim: 'kick', t: 7 };
   if (f.s === St.Charge) return { weapon: 0, anim: 'beam', t: f.t % 24 };
@@ -1503,10 +1503,12 @@ function drawBeam(ctx: CanvasRenderingContext2D, f: SnapFighter, cam: number, no
     orb(2 + (f.t / BEAM.charge) * 6 + Math.sin(now / 30));
     return;
   }
+  // fired under 爆氣 it is AURA.beamMul times as wide, as long and as lasting
+  const mul = f.b & 2048 ? AURA.beamMul : 1;
   const fireT = f.t - BEAM.charge;
-  if (fireT >= BEAM.fire) return;
-  const th = 4 + Math.sin(now / 55) * 1.2 + Math.min(4, fireT / 6);
-  const len = BEAM.len;
+  if (fireT >= BEAM.fire * mul) return;
+  const th = (4 + Math.sin(now / 55) * 1.2 + Math.min(4, fireT / 6)) * mul;
+  const len = BEAM.len * mul;
   const x0 = f.r > 0 ? hx : hx - len;
   ctx.fillStyle = 'rgba(60,170,255,0.28)';
   ctx.fillRect(x0, Math.round(sy - th * 1.7), len, Math.round(th * 3.4));
