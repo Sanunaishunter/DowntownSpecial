@@ -1485,16 +1485,22 @@ function drawShot(ctx: CanvasRenderingContext2D, s: { k: number; x: number; y: n
 function drawBeam(ctx: CanvasRenderingContext2D, f: SnapFighter, cam: number, now: number) {
   const sy = Math.round(f.y - f.z) - 20;
   const hx = Math.round(f.x - cam) + f.r * 14;
+  // fired under 爆氣 it is golden, and AURA.beamMul times as long and as lasting (as wide as ever)
+  const big = !!(f.b & 2048);
+  const mul = big ? AURA.beamMul : 1;
+  const [halo, rim, mid, core] = big
+    ? ['rgba(255,190,40,0.35)', '#ffc830', '#fff0a0', '#fff6d0']
+    : ['rgba(60,170,255,0.35)', '#5ae8ff', '#ffffff', '#ffffff'];
   const orb = (r: number) => {
-    ctx.fillStyle = 'rgba(60,170,255,0.35)';
+    ctx.fillStyle = halo;
     ctx.beginPath();
     ctx.arc(hx, sy, r * 1.7, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#5ae8ff';
+    ctx.fillStyle = rim;
     ctx.beginPath();
     ctx.arc(hx, sy, r, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = mid;
     ctx.beginPath();
     ctx.arc(hx, sy, r * 0.5, 0, Math.PI * 2);
     ctx.fill();
@@ -1503,18 +1509,16 @@ function drawBeam(ctx: CanvasRenderingContext2D, f: SnapFighter, cam: number, no
     orb(2 + (f.t / BEAM.charge) * 6 + Math.sin(now / 30));
     return;
   }
-  // fired under 爆氣 it is AURA.beamMul times as wide, as long and as lasting
-  const mul = f.b & 2048 ? AURA.beamMul : 1;
   const fireT = f.t - BEAM.charge;
   if (fireT >= BEAM.fire * mul) return;
-  const th = (4 + Math.sin(now / 55) * 1.2 + Math.min(4, fireT / 6)) * mul;
+  const th = 4 + Math.sin(now / 55) * 1.2 + Math.min(4, fireT / 6);
   const len = BEAM.len * mul;
   const x0 = f.r > 0 ? hx : hx - len;
-  ctx.fillStyle = 'rgba(60,170,255,0.28)';
+  ctx.fillStyle = big ? 'rgba(255,190,40,0.3)' : 'rgba(60,170,255,0.28)';
   ctx.fillRect(x0, Math.round(sy - th * 1.7), len, Math.round(th * 3.4));
-  ctx.fillStyle = 'rgba(90,230,255,0.8)';
+  ctx.fillStyle = big ? 'rgba(255,214,70,0.85)' : 'rgba(90,230,255,0.8)';
   ctx.fillRect(x0, Math.round(sy - th), len, Math.round(th * 2));
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = core;
   ctx.fillRect(x0, Math.round(sy - th * 0.4), len, Math.max(1, Math.round(th * 0.8)));
   ctx.fillStyle = 'rgba(255,255,255,0.9)';
   for (let i = 0; i < 9; i++) {

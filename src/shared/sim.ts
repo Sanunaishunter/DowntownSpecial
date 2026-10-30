@@ -1554,7 +1554,7 @@ function updateBeam(w: World, f: Fighter) {
     if (t.st === St.Down || t.st === St.GetUp || t.st === St.Dead) continue;
     const rx = (t.x - f.x) * f.face;
     if (rx < 4 || rx > BEAM.len * f.beamMul + 10) continue;
-    if (Math.abs(t.y - f.y) > BEAM.halfDepth * f.beamMul) continue;
+    if (Math.abs(t.y - f.y) > BEAM.halfDepth) continue;
     if (Math.abs(t.z - f.z - 14) > 30) continue;
     pinHit(w, t, f.slot, dmg, f.face);
   }

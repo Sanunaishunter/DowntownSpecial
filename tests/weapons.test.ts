@@ -124,7 +124,7 @@ describe('beam special', () => {
     expect(dealt).toBeGreaterThanOrEqual(BEAM.dmg * (BEAM.fire / BEAM.pulse) * 0.9);
   });
 
-  it('is four times as wide, as long and as lasting when fired under 爆氣', () => {
+  it('is twice as long and as lasting, but not wider, when fired under 爆氣', () => {
     const fire = (aura: boolean) => {
       const w = setup();
       const p = player(w);
@@ -135,8 +135,8 @@ describe('beam special', () => {
         e.sp[SP.Halo] = 99999;
         return e;
       };
-      const far = mk(600, 0);
-      const side = mk(60, 50);
+      const far = mk(300, 0);
+      const side = mk(60, 24);
       press(w, Btn.S1);
       run(w, BEAM.charge + 20);
       const longer = { far: far.hp < 99999, side: side.hp < 99999 };
@@ -150,7 +150,7 @@ describe('beam special', () => {
     expect(plain.longer).toEqual({ far: false, side: false });
     expect(plain.stillFiring).toBe(false);
     const big = fire(true);
-    expect(big.longer).toEqual({ far: true, side: true });
+    expect(big.longer).toEqual({ far: true, side: false });
     expect(big.stillFiring).toBe(true);
     expect(big.over).toBe(true);
   });
