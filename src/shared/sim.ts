@@ -401,6 +401,12 @@ function updatePlayer(w: World, f: Fighter, inp: PlayerInput | undefined) {
     f.vy = dy * d.walk * 0.7 * sp;
     if (dx) f.face = dx > 0 ? 1 : -1;
   }
+  if (f.st === St.Shoot && f.rain > 0) {
+    // 萬箭齊發: the hero walks about while the arrows fly
+    f.vx = dx * d.walk;
+    f.vy = dy * d.walk * 0.7;
+    if (dx) f.face = dx > 0 ? 1 : -1;
+  }
   if (f.weapon === WID.Gatling) {
     // the gun keeps spraying while A is held, and stops when it is let go, empty or jammed
     if (f.st === St.Shoot && (!(held & Btn.A) || f.wn <= 0 || f.heatCd > 0)) setSt(f, St.Idle);
@@ -851,8 +857,11 @@ function updateBody(w: World, f: Fighter) {
       if (f.t >= (atkFor(f)?.total ?? (f.st === St.Pick ? 10 : 12))) setSt(f, St.Idle);
       break;
     case St.Shoot:
-      f.vx = 0;
-      f.vy = 0;
+      // (in the arrow rain the hero walks, see the step above)
+      if (!(f.rain > 0)) {
+        f.vx = 0;
+        f.vy = 0;
+      }
       if (isPlayer(f) && f.weapon === WID.Gatling) {
         if (f.t % GATLING.gap === 1) fireGatling(w, f);
         break;
@@ -1414,11 +1423,17 @@ function startRain(w: World, f: Fighter) {
   f.rain = RAIN.dur;
   f.rainCd = RAIN.cooldown;
   f.bowRun = 0;
+  shout(f, CRY.rain, CRY.rainDur);
   w.ev.push([f.x, f.y, 20, EV_RAIN]);
 }
 
 /** Arrows burst out of the hero in every direction and then turn towards their enemies. */
 function tickRain(w: World, f: Fighter) {
+  // knocked out some other way (it cannot be hurt, but a fall or a stage change could still get it): the rain stops with it
+  if (f.hp <= 0 || f.st === St.Down || f.st === St.Dead || f.st === St.GetUp) {
+    f.rain = 0;
+    return;
+  }
   const k = RAIN.dur - f.rain;
   f.rain--;
   f.inv = Math.max(f.inv, 2);

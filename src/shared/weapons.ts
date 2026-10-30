@@ -114,22 +114,22 @@ export const BOW = { gap: 12, draw: 7, speed: 4.6, life: 90, dmg: 10, range: 140
 
 /**
  * 奧義 萬箭齊發: while the bow keeps shooting, after `minRun` arrows in a row each new arrow has `chance` to turn into it. For
- * `dur` ticks (1 s) `count` arrows burst out of the hero and each one hunts down an enemy of its own anywhere on the screen.
- * The hero cannot be hurt meanwhile. The next one comes no sooner than `cooldown` ticks later.
+ * `dur` ticks (5 s) `count` arrows burst out of the hero and each one hunts down an enemy of its own anywhere on the screen.
+ * The hero cannot be hurt meanwhile, and can walk about. The next one comes no sooner than `cooldown` ticks later.
  */
-export const RAIN = { minRun: 4, chance: 0.2, cooldown: 900, dur: 60, count: 100, speed: 5.4, turn: 0.4, life: 80, dmg: 8, lift: 4 };
+export const RAIN = { minRun: 4, chance: 0.2, cooldown: 900, dur: 300, count: 200, speed: 5.4, turn: 0.4, life: 80, dmg: 8, lift: 4 };
 
 /**
  * 霸王槍 (the long spear with the red cloth tied under its head): an ordinary blow is a thrust with the longest reach of all,
  * and it goes through everyone standing in the line. A thrust sometimes turns into one of two moves instead, with `chance`:
  * 誰說沒槍頭就捅不死 (霸王破陣: the hero charges forward `thrustDur` ticks at `thrustSpeed`, stabbing everything on the way
- * every `thrustGap` ticks) or 沒槍頭照樣捅死你 (a whirl of the spear `spinDur` ticks, hitting both sides every `spinGap` ticks while
+ * every `thrustGap` ticks) or 沒槍頭照樣捅死你 (a whirl of the spear for `spinDur` ticks (5 s), hitting both sides every `spinGap` ticks while
  * he walks on at `spinSpeed` x). Neither can be interrupted. The next one comes no sooner than `cooldown` ticks after.
  */
 export const SPEAR = {
-  chance: 0.2, cooldown: 300,
+  chance: 0.2, cooldown: 600,
   thrustDur: 40, thrustSpeed: 3.4, thrustGap: 4, thrustDmg: 9, thrustReach: 44,
-  spinDur: 36, spinGap: 5, spinDmg: 7, spinReach: 54, spinSpeed: 0.6,
+  spinDur: 300, spinGap: 5, spinDmg: 7, spinReach: 54, spinSpeed: 0.6,
 };
 
 /** 鬼火雙頭薙刀: sets what it hits alight (`burnDmg` every `burnGap` ticks for `burn` ticks) and heals the wielder `heal` of max health per hit. */

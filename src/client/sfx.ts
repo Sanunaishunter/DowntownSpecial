@@ -198,7 +198,7 @@ export class Sfx {
     this.tone(c, 2637, 2637, 0.5, 0.12, 'sine', 0.36);
   }
 
-  /** 萬箭齊發: a gong, a drum and a second of arrows rushing out. */
+  /** 萬箭齊發: a gong, a drum and arrows rushing out. */
   private rain(c: AudioContext) {
     this.tone(c, 110, 38, 0.5, 1);
     for (const f of [110, 165, 221, 331]) this.tone(c, f, f * 0.98, 2.0, 0.14, 'sine');

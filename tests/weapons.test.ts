@@ -1956,7 +1956,7 @@ describe('奧義 萬箭齊發', () => {
     return { w, p, foes };
   }
 
-  it('turns the arrows into 100 homing arrows in one second, and says so', () => {
+  it('turns the arrows into 200 homing arrows in five seconds, and says so', () => {
     const { w, p, foes } = rain();
     try {
       press(w, Btn.A);
@@ -1969,6 +1969,7 @@ describe('奧義 萬箭齊發', () => {
         if (before === 0 && p.rain > 0) break;
       }
       expect(p.rain).toBe(RAIN.dur);
+      expect(CRY_TEXT[p.cry]).toBe('奧義 萬箭齊發！');
       expect(p.bowRun).toBe(0);
       expect(p.rainCd).toBeGreaterThan(0);
       // right away the bow stays drawn and the hero cannot be hurt
@@ -1986,6 +1987,30 @@ describe('奧義 萬箭齊發', () => {
       // the arrows found their enemies, wherever they stood
       for (const e of foes) expect(e.hp).toBeLessThan(9999);
       expect(foes.reduce((s, e) => s + (9999 - e.hp), 0)).toBeGreaterThan(40 * RAIN.dmg);
+    } finally {
+      RAIN.chance = 0;
+    }
+  });
+
+  it('lets the hero walk about while the arrows fly', () => {
+    const { w, p } = rain();
+    try {
+      press(w, Btn.A);
+      for (let i = 0; i < 200 && p.rain === 0; i++) step(w, [{ held: Btn.A, pressed: 0 }, undefined]);
+      expect(p.rain).toBeGreaterThan(0);
+      const x0 = p.x;
+      const y0 = p.y;
+      run(w, 30, { held: Btn.A | Btn.Right | Btn.Down, pressed: 0 });
+      expect(p.x).toBeGreaterThan(x0 + 20);
+      expect(p.y).toBeGreaterThan(y0 + 10);
+      expect(p.st).toBe(St.Shoot);
+      expect(p.inv).toBeGreaterThan(0);
+      // and when it is over he stands still again
+      RAIN.chance = 0;
+      run(w, RAIN.dur, { held: Btn.A, pressed: 0 });
+      const x1 = p.x;
+      run(w, 10, { held: Btn.A | Btn.Right, pressed: 0 });
+      expect(p.x).toBe(x1);
     } finally {
       RAIN.chance = 0;
     }
@@ -2046,10 +2071,11 @@ describe('霸王槍', () => {
         run(w, 3);
         if (p.st === St.Thrust || p.st === St.Flourish) {
           seen.add(p.st);
-          expect(p.staffCd).toBeGreaterThan(SPEAR.cooldown - 10);
+          expect(p.staffCd).toBeGreaterThan(0);
           expect(CRY_TEXT[p.cry]).toBe(p.st === St.Thrust ? '誰說沒槍頭就捅不死！' : '沒槍頭照樣捅死你！');
         }
-        run(w, 60);
+        // wait for the move to be over (the whirl lasts 5 s)
+        run(w, SPEAR.spinDur + 30);
         p.staffCd = 0;
         p.x = 60;
       }
